@@ -28,11 +28,15 @@ export default function WorkspacePage() {
   const { data: video, isLoading: videoLoading } = useQuery({
     queryKey: ['/api/videos', videoId],
     enabled: !!videoId,
+    refetchInterval: 2000, // Always check video status
+    staleTime: 0,
   });
 
   const { data: transcriptions, isLoading: transcriptionsLoading } = useQuery({
     queryKey: ['/api/videos', videoId, 'transcriptions'],
     enabled: !!videoId,
+    refetchInterval: video?.status === 'processing' ? 2000 : false,
+    staleTime: 0, // Always fetch fresh data
   });
 
   // Fetch all English translations for transcriptions
@@ -61,6 +65,7 @@ export default function WorkspacePage() {
       return translationsMap;
     },
     enabled: !!transcriptions && transcriptions.length > 0,
+    refetchInterval: video?.status === 'processing' ? 3000 : video?.status === 'completed' ? 5000 : false, // Refresh while processing and after completion
   });
 
   const { data: dubbingJobs } = useQuery({

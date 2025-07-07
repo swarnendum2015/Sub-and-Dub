@@ -80,9 +80,8 @@ async function transcribeAudio(audioPath: string) {
   
   const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
   formData.append('audio', audioBlob, 'audio.wav');
-  formData.append('model', 'eleven_multilingual_v2');
-  // Remove language parameter to let the API auto-detect
-  // formData.append('language', 'bn'); // Bengali
+  formData.append('model_id', 'eleven_multilingual_v2');
+  formData.append('language', 'bn'); // Bengali
 
   const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
@@ -119,7 +118,7 @@ async function transcribeAudio(audioPath: string) {
 
 // Fallback transcription using OpenAI Whisper
 async function transcribeWithOpenAI(audioPath: string) {
-  const OpenAI = require('openai');
+  const { default: OpenAI } = await import('openai');
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   
   console.log('Using OpenAI Whisper for transcription...');
@@ -130,8 +129,7 @@ async function transcribeWithOpenAI(audioPath: string) {
     file: audioReadStream,
     model: 'whisper-1',
     language: 'bn', // Bengali
-    response_format: 'verbose_json',
-    timestamp_granularities: ['segment']
+    response_format: 'verbose_json'
   });
   
   console.log('OpenAI Whisper transcription result:', transcription);

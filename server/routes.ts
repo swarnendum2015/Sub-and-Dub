@@ -73,6 +73,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Process video endpoint
+  app.post("/api/videos/:id/process", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+
+      // Start processing in the background
+      processVideo(videoId);
+      
+      res.json({ message: "Video processing started", videoId: videoId });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to start video processing", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Serve video files
   app.get("/api/videos/:id/stream", async (req, res) => {
     try {
@@ -206,24 +224,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Background processing function
 async function processVideo(videoId: number) {
   try {
+    console.log(`Starting video processing for ID: ${videoId}`);
     await storage.updateVideoStatus(videoId, "processing");
     
     // Transcribe video
+    console.log(`Starting transcription for video ${videoId}`);
     const transcriptions = await transcribeVideo(videoId);
+    console.log(`Transcription completed. Found ${transcriptions.length} transcriptions for video ${videoId}`);
     
-    // Generate translations for each transcription
+    // Generate translations for each transcription (focus on English first)
     for (const transcription of transcriptions) {
-      const languages = ["en", "hi", "ta", "te", "ml"]; // English, Hindi, Tamil, Telugu, Malayalam
-      for (const lang of languages) {
-        if (lang !== "bn") { // Skip Bengali as it's the original
-          await translateText(transcription.id, lang);
+      try {
+        console.log(`Starting English translation for transcription ${transcription.id}`);
+        const englishTranslation = await translateText(transcription.id, "en");
+        console.log(`English translation completed for transcription ${transcription.id}`);
+        
+        // Generate other language translations
+        const otherLanguages = ["hi", "ta", "te", "ml"]; // Hindi, Tamil, Telugu, Malayalam
+        for (const lang of otherLanguages) {
+          try {
+            console.log(`Starting ${lang} translation for transcription ${transcription.id}`);
+            await translateText(transcription.id, lang);
+            console.log(`${lang} translation completed for transcription ${transcription.id}`);
+          } catch (error) {
+            console.error(`Error translating to ${lang} for transcription ${transcription.id}:`, error);
+          }
         }
+      } catch (error) {
+        console.error(`Error translating transcription ${transcription.id}:`, error);
       }
     }
     
     await storage.updateVideoStatus(videoId, "completed");
+    console.log(`Video processing completed for ID: ${videoId}`);
   } catch (error) {
-    console.error("Processing failed:", error);
+    console.error(`Processing failed for video ${videoId}:`, error);
     await storage.updateVideoStatus(videoId, "failed");
   }
 }

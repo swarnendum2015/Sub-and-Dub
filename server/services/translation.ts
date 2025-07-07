@@ -9,13 +9,26 @@ const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || "";
 const AZURE_TRANSLATOR_KEY = process.env.AZURE_TRANSLATOR_KEY || "";
 
 export async function translateText(transcriptionId: number, targetLanguage: string) {
-  // First get all transcriptions to find the one we need
-  const allTranscriptions = await storage.getTranscriptionsByVideoId(1); // This should get video ID dynamically
-  const transcription = allTranscriptions.find(t => t.id === transcriptionId);
+  console.log(`Starting translation for transcription ${transcriptionId} to ${targetLanguage}`);
+  
+  // Find the transcription by iterating through all videos
+  let transcription = null;
+  const allVideos = await storage.getAllVideos();
+  
+  for (const video of allVideos) {
+    const transcriptions = await storage.getTranscriptionsByVideoId(video.id);
+    const found = transcriptions.find(t => t.id === transcriptionId);
+    if (found) {
+      transcription = found;
+      break;
+    }
+  }
+  
   if (!transcription) {
     throw new Error("Transcription not found");
   }
 
+  console.log(`Found transcription: "${transcription.text.substring(0, 50)}..."`);
   const sourceText = transcription.text;
   
   // Use multiple translation models for confidence scoring
@@ -33,13 +46,18 @@ export async function translateText(transcriptionId: number, targetLanguage: str
     current.confidence > best.confidence ? current : best
   );
 
-  return await storage.createTranslation({
+  console.log(`Creating translation for transcription ${transcriptionId}: "${bestTranslation.text.substring(0, 50)}..." with confidence ${confidence}`);
+  
+  const translation = await storage.createTranslation({
     transcriptionId,
     targetLanguage,
     translatedText: bestTranslation.text,
     confidence: confidence,
-    model: "multi-model-ensemble",
+    translationService: "multi-model-ensemble",
   });
+  
+  console.log(`Translation created successfully with ID: ${translation.id}`);
+  return translation;
 }
 
 async function translateWithOpenAI(text: string, targetLanguage: string) {

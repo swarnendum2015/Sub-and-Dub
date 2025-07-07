@@ -36,8 +36,8 @@ This is a full-stack web application for video dubbing and translation. The plat
 4. **Dubbing**: AI voice generation using ElevenLabs Dubbing Studio
 
 ### Storage Strategy
-- **Development**: In-memory storage implementation for rapid prototyping
-- **Production Ready**: Database-backed storage with proper relationships
+- **Database**: PostgreSQL with Drizzle ORM for persistent data storage
+- **Schema**: Videos, transcriptions, translations, and dubbing jobs with proper relationships
 - **File Management**: Local file system with organized upload directories
 
 ### AI/ML Integrations

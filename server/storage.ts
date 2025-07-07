@@ -12,6 +12,8 @@ import {
   type DubbingJob,
   type InsertDubbingJob
 } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
   // Video operations
@@ -35,6 +37,83 @@ export interface IStorage {
   createDubbingJob(dubbingJob: InsertDubbingJob): Promise<DubbingJob>;
   getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]>;
   updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void>;
+}
+
+export class DatabaseStorage implements IStorage {
+  async createVideo(insertVideo: InsertVideo): Promise<Video> {
+    const [video] = await db
+      .insert(videos)
+      .values(insertVideo)
+      .returning();
+    return video;
+  }
+
+  async getVideo(id: number): Promise<Video | undefined> {
+    const [video] = await db.select().from(videos).where(eq(videos.id, id));
+    return video || undefined;
+  }
+
+  async getAllVideos(): Promise<Video[]> {
+    return await db.select().from(videos);
+  }
+
+  async updateVideoStatus(id: number, status: string): Promise<void> {
+    await db.update(videos).set({ status }).where(eq(videos.id, id));
+  }
+
+  async updateVideoDuration(id: number, duration: number): Promise<void> {
+    await db.update(videos).set({ duration }).where(eq(videos.id, id));
+  }
+
+  async createTranscription(insertTranscription: InsertTranscription): Promise<Transcription> {
+    const [transcription] = await db
+      .insert(transcriptions)
+      .values(insertTranscription)
+      .returning();
+    return transcription;
+  }
+
+  async getTranscriptionsByVideoId(videoId: number): Promise<Transcription[]> {
+    return await db.select().from(transcriptions).where(eq(transcriptions.videoId, videoId));
+  }
+
+  async updateTranscription(id: number, text: string): Promise<void> {
+    await db.update(transcriptions).set({ text }).where(eq(transcriptions.id, id));
+  }
+
+  async createTranslation(insertTranslation: InsertTranslation): Promise<Translation> {
+    const [translation] = await db
+      .insert(translations)
+      .values(insertTranslation)
+      .returning();
+    return translation;
+  }
+
+  async getTranslationsByTranscriptionId(transcriptionId: number): Promise<Translation[]> {
+    return await db.select().from(translations).where(eq(translations.transcriptionId, transcriptionId));
+  }
+
+  async updateTranslation(id: number, text: string): Promise<void> {
+    await db.update(translations).set({ translatedText: text }).where(eq(translations.id, id));
+  }
+
+  async createDubbingJob(insertDubbingJob: InsertDubbingJob): Promise<DubbingJob> {
+    const [dubbingJob] = await db
+      .insert(dubbingJobs)
+      .values(insertDubbingJob)
+      .returning();
+    return dubbingJob;
+  }
+
+  async getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]> {
+    return await db.select().from(dubbingJobs).where(eq(dubbingJobs.videoId, videoId));
+  }
+
+  async updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void> {
+    const updateData: any = { status };
+    if (audioPath) updateData.audioPath = audioPath;
+    await db.update(dubbingJobs).set(updateData).where(eq(dubbingJobs.id, id));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -163,4 +242,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

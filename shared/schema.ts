@@ -1,5 +1,6 @@
 import { pgTable, text, serial, integer, boolean, timestamp, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { relations } from "drizzle-orm";
 import { z } from "zod";
 
 export const videos = pgTable("videos", {
@@ -64,6 +65,34 @@ export const insertDubbingJobSchema = createInsertSchema(dubbingJobs).omit({
   id: true,
   createdAt: true,
 });
+
+// Relations
+export const videosRelations = relations(videos, ({ many }) => ({
+  transcriptions: many(transcriptions),
+  dubbingJobs: many(dubbingJobs),
+}));
+
+export const transcriptionsRelations = relations(transcriptions, ({ one, many }) => ({
+  video: one(videos, {
+    fields: [transcriptions.videoId],
+    references: [videos.id],
+  }),
+  translations: many(translations),
+}));
+
+export const translationsRelations = relations(translations, ({ one }) => ({
+  transcription: one(transcriptions, {
+    fields: [translations.transcriptionId],
+    references: [transcriptions.id],
+  }),
+}));
+
+export const dubbingJobsRelations = relations(dubbingJobs, ({ one }) => ({
+  video: one(videos, {
+    fields: [dubbingJobs.videoId],
+    references: [videos.id],
+  }),
+}));
 
 export type Video = typeof videos.$inferSelect;
 export type InsertVideo = z.infer<typeof insertVideoSchema>;

@@ -36,7 +36,7 @@ function WorkspaceContent() {
   });
 
   const { data: transcriptions, isLoading: transcriptionsLoading } = useQuery({
-    queryKey: ['/api/videos', videoId, 'transcriptions'],
+    queryKey: [`/api/videos/${videoId}/transcriptions`],
     enabled: !!videoId,
     refetchInterval: video?.status === 'processing' ? 2000 : false,
     staleTime: 0, // Always fetch fresh data
@@ -287,11 +287,11 @@ function WorkspaceContent() {
           
           <div className="flex-1 flex">
             {/* Bengali Side */}
-            <div className="flex-1 border-r border-slate-200">
+            <div className="flex-1 border-r border-slate-200 flex flex-col">
               <div className="p-3 bg-slate-50 border-b">
                 <h4 className="text-sm font-medium text-slate-700">Original (Bengali)</h4>
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ minHeight: '400px' }}>
                 {transcriptionsLoading ? (
                   <div className="space-y-3">
                     {Array.from({ length: 4 }, (_, i) => (
@@ -330,11 +330,11 @@ function WorkspaceContent() {
             </div>
             
             {/* English Side */}
-            <div className="flex-1">
+            <div className="flex-1 flex flex-col">
               <div className="p-3 bg-slate-50 border-b">
                 <h4 className="text-sm font-medium text-slate-700">English Translation</h4>
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ minHeight: '400px' }}>
                 {transcriptionsLoading || translationsLoading ? (
                   <div className="space-y-3">
                     {Array.from({ length: 4 }, (_, i) => (

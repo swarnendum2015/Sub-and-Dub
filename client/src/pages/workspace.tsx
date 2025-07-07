@@ -35,6 +35,34 @@ export default function WorkspacePage() {
     enabled: !!videoId,
   });
 
+  // Fetch all English translations for transcriptions
+  const { data: allTranslations, isLoading: translationsLoading } = useQuery({
+    queryKey: ['/api/videos', videoId, 'translations', 'en'],
+    queryFn: async () => {
+      if (!transcriptions || transcriptions.length === 0) return {};
+      
+      const translationsMap: Record<number, any> = {};
+      
+      for (const transcription of transcriptions) {
+        try {
+          const response = await fetch(`/api/transcriptions/${transcription.id}/translations`);
+          if (response.ok) {
+            const translations = await response.json();
+            const englishTranslation = translations.find((t: any) => t.targetLanguage === 'en');
+            if (englishTranslation) {
+              translationsMap[transcription.id] = englishTranslation;
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to fetch translation for transcription ${transcription.id}:`, error);
+        }
+      }
+      
+      return translationsMap;
+    },
+    enabled: !!transcriptions && transcriptions.length > 0,
+  });
+
   const { data: dubbingJobs } = useQuery({
     queryKey: ['/api/videos', videoId, 'dubbing'],
     enabled: !!videoId,
@@ -222,17 +250,124 @@ export default function WorkspacePage() {
           />
         </div>
 
-        {/* Transcription/Translation Panel */}
-        <div className="w-96 bg-white border-l border-slate-200 flex flex-col">
-          <TranscriptionPanel
-            videoId={videoId!}
-            transcriptions={transcriptions || []}
-            currentLanguage={currentLanguage}
-            onLanguageChange={setCurrentLanguage}
-            currentTime={currentTime}
-            onTimeSeek={setCurrentTime}
-            isLoading={transcriptionsLoading}
-          />
+        {/* Bengali and English Translation Panel */}
+        <div className="w-1/2 bg-white border-l border-slate-200 flex flex-col">
+          <div className="border-b border-slate-200 p-3">
+            <h3 className="font-medium text-slate-900">Bengali & English</h3>
+          </div>
+          
+          <div className="flex-1 flex">
+            {/* Bengali Side */}
+            <div className="flex-1 border-r border-slate-200">
+              <div className="p-3 bg-slate-50 border-b">
+                <h4 className="text-sm font-medium text-slate-700">Original (Bengali)</h4>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {transcriptionsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 4 }, (_, i) => (
+                      <div key={i} className="p-3 bg-slate-50 rounded animate-pulse">
+                        <div className="h-4 bg-slate-200 rounded mb-2"></div>
+                        <div className="h-12 bg-slate-200 rounded"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : transcriptions && transcriptions.length > 0 ? (
+                  transcriptions.map((transcription) => {
+                    const isCurrentSegment = currentTime >= transcription.startTime && currentTime <= transcription.endTime;
+                    return (
+                      <div
+                        key={transcription.id}
+                        className={`p-3 rounded cursor-pointer transition-all ${
+                          isCurrentSegment 
+                            ? "bg-blue-50 border-2 border-blue-200" 
+                            : "bg-slate-50 hover:bg-slate-100"
+                        }`}
+                        onClick={() => setCurrentTime(transcription.startTime)}
+                      >
+                        <div className="text-xs text-slate-500 mb-2">
+                          {Math.floor(transcription.startTime / 60)}:{(transcription.startTime % 60).toFixed(0).padStart(2, '0')} - {Math.floor(transcription.endTime / 60)}:{(transcription.endTime % 60).toFixed(0).padStart(2, '0')}
+                        </div>
+                        <div className="text-sm">{transcription.text}</div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    <p>Processing transcription...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* English Side */}
+            <div className="flex-1">
+              <div className="p-3 bg-slate-50 border-b">
+                <h4 className="text-sm font-medium text-slate-700">English Translation</h4>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {transcriptionsLoading || translationsLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 4 }, (_, i) => (
+                      <div key={i} className="p-3 bg-slate-50 rounded animate-pulse">
+                        <div className="h-4 bg-slate-200 rounded mb-2"></div>
+                        <div className="h-12 bg-slate-200 rounded"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : transcriptions && transcriptions.length > 0 ? (
+                  transcriptions.map((transcription) => {
+                    const englishTranslation = allTranslations?.[transcription.id];
+                    const isCurrentSegment = currentTime >= transcription.startTime && currentTime <= transcription.endTime;
+                    
+                    return (
+                      <div
+                        key={`en-${transcription.id}`}
+                        className={`p-3 rounded cursor-pointer transition-all ${
+                          isCurrentSegment 
+                            ? "bg-blue-50 border-2 border-blue-200" 
+                            : "bg-slate-50 hover:bg-slate-100"
+                        }`}
+                        onClick={() => setCurrentTime(transcription.startTime)}
+                      >
+                        <div className="text-xs text-slate-500 mb-2">
+                          {Math.floor(transcription.startTime / 60)}:{(transcription.startTime % 60).toFixed(0).padStart(2, '0')} - {Math.floor(transcription.endTime / 60)}:{(transcription.endTime % 60).toFixed(0).padStart(2, '0')}
+                        </div>
+                        <div className="text-sm">
+                          {englishTranslation ? (
+                            englishTranslation.text
+                          ) : (
+                            <span className="text-slate-400 italic">Translating...</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    <p>English translations will appear here</p>
+                    <p className="text-xs mt-2">Upload a video to get started</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="border-t border-slate-200 p-4 space-y-3">
+            <Button
+              className="w-full"
+              onClick={() => {/* TODO: Generate dubbing */}}
+            >
+              Generate English Dubbing
+            </Button>
+            <div className="grid grid-cols-3 gap-2">
+              <Button variant="outline" size="sm">Hindi</Button>
+              <Button variant="outline" size="sm">Tamil</Button>
+              <Button variant="outline" size="sm">Telugu</Button>
+            </div>
+            <Button variant="outline" size="sm" className="w-full">Malayalam</Button>
+          </div>
         </div>
       </div>
     </div>

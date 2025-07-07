@@ -9,12 +9,14 @@ const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || "";
 const AZURE_TRANSLATOR_KEY = process.env.AZURE_TRANSLATOR_KEY || "";
 
 export async function translateText(transcriptionId: number, targetLanguage: string) {
-  const transcription = await storage.getTranscriptionsByVideoId(transcriptionId);
-  if (!transcription.length) {
+  // First get all transcriptions to find the one we need
+  const allTranscriptions = await storage.getTranscriptionsByVideoId(1); // This should get video ID dynamically
+  const transcription = allTranscriptions.find(t => t.id === transcriptionId);
+  if (!transcription) {
     throw new Error("Transcription not found");
   }
 
-  const sourceText = transcription[0].text;
+  const sourceText = transcription.text;
   
   // Use multiple translation models for confidence scoring
   const translations = await Promise.all([

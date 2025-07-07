@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VideoPlayer } from "@/components/video-player";
 import { TranscriptionPanel } from "@/components/transcription-panel";
+import ErrorBoundary from "@/components/error-boundary";
+import { ProcessingScreen } from "@/components/processing-screen";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   MessageSquare, 
   Menu, 
@@ -19,7 +22,7 @@ import {
   Video
 } from "lucide-react";
 
-export default function WorkspacePage() {
+function WorkspaceContent() {
   const { videoId } = useParams<{ videoId: string }>();
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState("bn");
@@ -73,6 +76,16 @@ export default function WorkspacePage() {
     enabled: !!videoId,
   });
 
+  // Retry processing mutation - must be declared before any conditional returns
+  const retryProcessingMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', `/api/videos/${videoId}/process`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
+    }
+  });
+
   const getProcessingStatus = () => {
     if (!video) return { status: "loading", color: "bg-gray-100 text-gray-700" };
     
@@ -122,6 +135,17 @@ export default function WorkspacePage() {
   }
 
   const processingStatus = getProcessingStatus();
+
+  // Show processing screen for videos in processing or failed state
+  if (video?.status === 'processing' || (video?.status === 'failed' && transcriptions?.length === 0)) {
+    return (
+      <ProcessingScreen 
+        videoId={videoId!} 
+        videoName={video.originalName}
+        onRetry={() => retryProcessingMutation.mutate()}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -376,5 +400,13 @@ export default function WorkspacePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function WorkspacePage() {
+  return (
+    <ErrorBoundary>
+      <WorkspaceContent />
+    </ErrorBoundary>
   );
 }

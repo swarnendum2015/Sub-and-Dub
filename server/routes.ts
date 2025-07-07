@@ -230,10 +230,11 @@ async function processVideo(videoId: number) {
     // Transcribe video
     console.log(`Starting transcription for video ${videoId}`);
     const transcriptions = await transcribeVideo(videoId);
-    console.log(`Transcription completed. Found ${transcriptions.length} transcriptions for video ${videoId}`);
+    console.log(`Transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
     
     // Generate translations for each transcription (focus on English first)
-    for (const transcription of transcriptions) {
+    if (transcriptions && transcriptions.length > 0) {
+      for (const transcription of transcriptions) {
       try {
         console.log(`Starting English translation for transcription ${transcription.id}`);
         const englishTranslation = await translateText(transcription.id, "en");
@@ -253,6 +254,9 @@ async function processVideo(videoId: number) {
       } catch (error) {
         console.error(`Error translating transcription ${transcription.id}:`, error);
       }
+    }
+    } else {
+      console.error(`No transcriptions found for video ${videoId}`);
     }
     
     await storage.updateVideoStatus(videoId, "completed");

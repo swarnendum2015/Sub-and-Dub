@@ -271,7 +271,7 @@ function WorkspaceContent() {
         )}
 
         {/* Video Player Section */}
-        <div className="flex-1 flex flex-col">
+        <div className="w-1/2 bg-black">
           <VideoPlayer
             videoId={videoId!}
             currentTime={currentTime}

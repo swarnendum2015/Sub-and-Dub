@@ -123,12 +123,13 @@ export function VideoPlayer({ videoId, currentTime, onTimeUpdate }: VideoPlayerP
   };
 
   return (
-    <div className="flex-1 bg-black relative">
+    <div className="w-full h-full bg-black relative">
       <video
         ref={videoRef}
         className="w-full h-full object-contain"
         src={`/api/videos/${videoId}/stream`}
         preload="metadata"
+        controls
       />
       
       {/* Current Time Indicator */}

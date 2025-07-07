@@ -335,7 +335,7 @@ export default function WorkspacePage() {
                         </div>
                         <div className="text-sm">
                           {englishTranslation ? (
-                            englishTranslation.text
+                            englishTranslation.translatedText
                           ) : (
                             <span className="text-slate-400 italic">Translating...</span>
                           )}

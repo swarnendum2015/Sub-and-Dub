@@ -22,8 +22,14 @@ export async function transcribeVideo(videoId: number) {
   const duration = await getVideoDuration(video.filePath);
   await storage.updateVideoDuration(videoId, duration);
 
-  // Transcribe audio using ElevenLabs
-  const transcriptionResult = await transcribeAudio(audioPath);
+  // Try ElevenLabs first, fallback to OpenAI if it fails
+  let transcriptionResult;
+  try {
+    transcriptionResult = await transcribeAudio(audioPath);
+  } catch (elevenLabsError) {
+    console.error('ElevenLabs failed, trying OpenAI Whisper:', elevenLabsError);
+    transcriptionResult = await transcribeWithOpenAI(audioPath);
+  }
   
   // Create transcription segments
   const transcriptions = [];
@@ -60,16 +66,23 @@ async function getVideoDuration(videoPath: string): Promise<number> {
 }
 
 async function transcribeAudio(audioPath: string) {
+  console.log('Starting ElevenLabs transcription...');
+  console.log('API Key available:', !!ELEVENLABS_API_KEY);
+  console.log('Audio file exists:', fs.existsSync(audioPath));
+  
   if (!ELEVENLABS_API_KEY) {
     throw new Error("ElevenLabs API key is required");
   }
 
   const formData = new FormData();
   const audioBuffer = fs.readFileSync(audioPath);
+  console.log('Audio buffer size:', audioBuffer.length);
+  
   const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' });
   formData.append('audio', audioBlob, 'audio.wav');
   formData.append('model', 'eleven_multilingual_v2');
-  formData.append('language', 'bn'); // Bengali
+  // Remove language parameter to let the API auto-detect
+  // formData.append('language', 'bn'); // Bengali
 
   const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
     method: 'POST',
@@ -80,10 +93,13 @@ async function transcribeAudio(audioPath: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`ElevenLabs transcription failed: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('ElevenLabs API Error:', response.status, response.statusText, errorText);
+    throw new Error(`ElevenLabs transcription failed: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
   const result = await response.json();
+  console.log('ElevenLabs API response:', result);
   
   // Convert to our expected format
   return {
@@ -93,10 +109,45 @@ async function transcribeAudio(audioPath: string) {
       end: segment.end,
       confidence: segment.confidence || 0.9,
     })) || [{
-      text: result.text || "",
+      text: result.text || "No transcription available",
       start: 0,
       end: 10,
       confidence: 0.9,
     }],
+  };
+}
+
+// Fallback transcription using OpenAI Whisper
+async function transcribeWithOpenAI(audioPath: string) {
+  const OpenAI = require('openai');
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  
+  console.log('Using OpenAI Whisper for transcription...');
+  
+  const audioReadStream = fs.createReadStream(audioPath);
+  
+  const transcription = await openai.audio.transcriptions.create({
+    file: audioReadStream,
+    model: 'whisper-1',
+    language: 'bn', // Bengali
+    response_format: 'verbose_json',
+    timestamp_granularities: ['segment']
+  });
+  
+  console.log('OpenAI Whisper transcription result:', transcription);
+  
+  // Convert to our expected format
+  return {
+    segments: transcription.segments?.map((segment: any) => ({
+      text: segment.text,
+      start: segment.start,
+      end: segment.end,
+      confidence: 0.8 // OpenAI doesn't provide confidence scores
+    })) || [{
+      text: transcription.text || "No transcription available",
+      start: 0,
+      end: 10,
+      confidence: 0.5
+    }]
   };
 }

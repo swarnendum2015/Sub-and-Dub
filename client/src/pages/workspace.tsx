@@ -1,0 +1,240 @@
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useParams } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { VideoPlayer } from "@/components/video-player";
+import { TranscriptionPanel } from "@/components/transcription-panel";
+import { 
+  MessageSquare, 
+  Menu, 
+  Download, 
+  FileAudio, 
+  FileVideo,
+  Settings,
+  Palette,
+  CheckCircle,
+  Video
+} from "lucide-react";
+
+export default function WorkspacePage() {
+  const { videoId } = useParams<{ videoId: string }>();
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState("bn");
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const { data: video, isLoading: videoLoading } = useQuery({
+    queryKey: ['/api/videos', videoId],
+    enabled: !!videoId,
+  });
+
+  const { data: transcriptions, isLoading: transcriptionsLoading } = useQuery({
+    queryKey: ['/api/videos', videoId, 'transcriptions'],
+    enabled: !!videoId,
+  });
+
+  const { data: dubbingJobs } = useQuery({
+    queryKey: ['/api/videos', videoId, 'dubbing'],
+    enabled: !!videoId,
+  });
+
+  const getProcessingStatus = () => {
+    if (!video) return { status: "loading", color: "bg-gray-100 text-gray-700" };
+    
+    switch (video.status) {
+      case "completed":
+        return { status: "Processing Complete", color: "bg-green-100 text-green-700" };
+      case "processing":
+        return { status: "Processing", color: "bg-blue-100 text-blue-700" };
+      case "failed":
+        return { status: "Processing Failed", color: "bg-red-100 text-red-700" };
+      default:
+        return { status: "Uploaded", color: "bg-gray-100 text-gray-700" };
+    }
+  };
+
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.9) return "confidence-high";
+    if (confidence >= 0.7) return "confidence-medium";
+    return "confidence-low";
+  };
+
+  const formatConfidence = (confidence: number) => {
+    return `${Math.round(confidence * 100)}%`;
+  };
+
+  if (videoLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading video...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!video) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Card className="w-full max-w-md mx-4">
+          <CardContent className="pt-6 text-center">
+            <p className="text-slate-600">Video not found</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const processingStatus = getProcessingStatus();
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Compact Top Navigation */}
+      <nav className="bg-white border-b border-slate-200 px-4 py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">
+                <MessageSquare className="w-3 h-3 text-white" />
+              </div>
+              <span className="font-medium text-slate-900">SubtitlePro</span>
+            </div>
+            <span className="text-sm text-slate-600 truncate max-w-md">{video.originalName}</span>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <Badge className={`${processingStatus.color} text-xs`}>
+              {video.status === "completed" && <CheckCircle className="w-3 h-3 mr-1" />}
+              {video.status === "processing" && (
+                <div className="w-2 h-2 bg-current rounded-full animate-pulse mr-1"></div>
+              )}
+              <span>{processingStatus.status}</span>
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSideMenuOpen(!sideMenuOpen)}
+            >
+              <Menu className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Workspace */}
+      <div className="flex h-[calc(100vh-48px)]">
+        {/* Collapsible Side Menu */}
+        {sideMenuOpen && (
+          <div className="w-64 bg-white border-r border-slate-200 p-4 space-y-6">
+            {/* Export Options */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-3">Export Options</h3>
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4 mr-3" />
+                  Download SRT Files
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                >
+                  <FileAudio className="w-4 h-4 mr-3" />
+                  Export Dubbed Audio
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                >
+                  <FileVideo className="w-4 h-4 mr-3" />
+                  Export Final Video
+                </Button>
+              </div>
+            </div>
+
+            {/* Settings */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-3">Settings</h3>
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                >
+                  <Settings className="w-4 h-4 mr-3" />
+                  AI Model Settings
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  size="sm"
+                >
+                  <Palette className="w-4 h-4 mr-3" />
+                  Subtitle Styling
+                </Button>
+              </div>
+            </div>
+
+            {/* Processing History */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 mb-3">Processing History</h3>
+              <div className="space-y-3">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-green-900">Bengali Transcription</span>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="text-xs text-green-700">Confidence: 94%</div>
+                </div>
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-green-900">English Translation</span>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="text-xs text-green-700">Confidence: 91%</div>
+                </div>
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-green-900">Hindi Translation</span>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div className="text-xs text-green-700">Confidence: 89%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Video Player Section */}
+        <div className="flex-1 flex flex-col">
+          <VideoPlayer
+            videoId={videoId!}
+            currentTime={currentTime}
+            onTimeUpdate={setCurrentTime}
+          />
+        </div>
+
+        {/* Transcription/Translation Panel */}
+        <div className="w-96 bg-white border-l border-slate-200 flex flex-col">
+          <TranscriptionPanel
+            videoId={videoId!}
+            transcriptions={transcriptions || []}
+            currentLanguage={currentLanguage}
+            onLanguageChange={setCurrentLanguage}
+            currentTime={currentTime}
+            onTimeSeek={setCurrentTime}
+            isLoading={transcriptionsLoading}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

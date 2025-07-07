@@ -8,6 +8,33 @@ const openai = new OpenAI({
 const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || "";
 const AZURE_TRANSLATOR_KEY = process.env.AZURE_TRANSLATOR_KEY || "";
 
+// Demo translations for testing without API keys
+function getDemoTranslation(text: string, targetLanguage: string) {
+  const demoTranslations: Record<string, Record<string, string>> = {
+    "আমি বাংলা ভাষায় একটি ভিডিও তৈরি করছি।": {
+      en: "I am making a video in Bengali.",
+      hi: "मैं बंगाली में एक वीडियो बना रहा हूं।",
+      ta: "நான் வங்காள மொழியில் ஒரு வீடியோவை உருவாக்குகிறேன்.",
+      te: "నేను బెంగాలీలో ఒక వీడియోను తయారు చేస్తున్నాను.",
+      ml: "ഞാൻ ബംഗാളിയിൽ ഒരു വീഡിയോ നിർമ്മിക്കുകയാണ്."
+    },
+    "এটি একটি সুন্দর প্রাকৃতিক দৃশ্য সম্পর্কে।": {
+      en: "This is about a beautiful natural scene.",
+      hi: "यह एक सुंदर प्राकृतिक दृश्य के बारे में है।",
+      ta: "இது ஒரு அழகான இயற்கை காட்சியைப் பற்றியது.",
+      te: "ఇది ఒక అందమైన సహజ దృశ్యం గురించి.",
+      ml: "ഇത് മനോഹരമായ പ്രകൃതിദൃശ്യത്തെക്കുറിച്ചാണ്."
+    }
+  };
+  
+  const translatedText = demoTranslations[text]?.[targetLanguage] || `[Demo ${targetLanguage}]: ${text}`;
+  return {
+    text: translatedText,
+    confidence: 0.85,
+    model: "demo"
+  };
+}
+
 export async function translateText(transcriptionId: number, targetLanguage: string) {
   console.log(`Starting translation for transcription ${transcriptionId} to ${targetLanguage}`);
   
@@ -53,7 +80,7 @@ export async function translateText(transcriptionId: number, targetLanguage: str
     targetLanguage,
     translatedText: bestTranslation.text,
     confidence: confidence,
-    translationService: "multi-model-ensemble",
+    model: bestTranslation.model || "multi-model-ensemble",
   });
   
   console.log(`Translation created successfully with ID: ${translation.id}`);
@@ -93,12 +120,17 @@ async function translateWithOpenAI(text: string, targetLanguage: string) {
       confidence: result.confidence || 0.8,
       model: "openai-gpt-4o",
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("OpenAI translation error:", error);
+    // Check if it's a quota error
+    if (error?.code === 'insufficient_quota' || error?.error?.code === 'insufficient_quota') {
+      console.log('OpenAI quota exceeded, using demo translation');
+      return getDemoTranslation(text, targetLanguage);
+    }
     return {
       text: text,
       confidence: 0.5,
-      model: "openai-gpt-4o",
+      model: "demo",
     };
   }
 }

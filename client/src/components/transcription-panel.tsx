@@ -12,7 +12,7 @@ import type { Transcription } from "@shared/schema";
 
 interface TranscriptionPanelProps {
   videoId: string;
-  transcriptions: Transcription[];
+  transcriptions: any[];
   currentLanguage: string;
   onLanguageChange: (language: string) => void;
   currentTime: number;

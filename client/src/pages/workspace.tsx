@@ -323,7 +323,8 @@ function WorkspaceContent() {
                   })
                 ) : (
                   <div className="text-center py-8 text-slate-500">
-                    <p>Processing transcription...</p>
+                    <p>No transcriptions available</p>
+                    <p className="text-xs mt-2">Video status: {video?.status}</p>
                   </div>
                 )}
               </div>

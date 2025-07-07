@@ -159,13 +159,13 @@ function WorkspaceContent() {
               </div>
               <span className="font-medium text-slate-900">SubtitlePro</span>
             </div>
-            <span className="text-sm text-slate-600 truncate max-w-md">{video.originalName}</span>
+            <span className="text-sm text-slate-600 truncate max-w-md">{video?.originalName || 'Untitled'}</span>
           </div>
 
           <div className="flex items-center space-x-3">
             <Badge className={`${processingStatus.color} text-xs`}>
-              {video.status === "completed" && <CheckCircle className="w-3 h-3 mr-1" />}
-              {video.status === "processing" && (
+              {video?.status === "completed" && <CheckCircle className="w-3 h-3 mr-1" />}
+              {video?.status === "processing" && (
                 <div className="w-2 h-2 bg-current rounded-full animate-pulse mr-1"></div>
               )}
               <span>{processingStatus.status}</span>

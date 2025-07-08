@@ -349,22 +349,28 @@ async function processVideoWithTimeout(videoId: number) {
 // Background processing function
 async function processVideo(videoId: number) {
   try {
-    console.log(`Starting video processing for ID: ${videoId}`);
+    console.log(`[PROCESS] Starting video processing for ID: ${videoId}`);
     await storage.updateVideoStatus(videoId, "processing");
     
     // Transcribe video (Bengali only)
-    console.log(`Starting Bengali transcription for video ${videoId}`);
-    const transcriptions = await transcribeVideo(videoId);
-    console.log(`Bengali transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
+    console.log(`[PROCESS] Starting Bengali transcription for video ${videoId}`);
+    try {
+      const transcriptions = await transcribeVideo(videoId);
+      console.log(`[PROCESS] Bengali transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
+    } catch (transcribeError) {
+      console.error(`[PROCESS] Transcription error for video ${videoId}:`, transcribeError);
+      throw transcribeError;
+    }
     
     // DO NOT generate translations automatically
     // Translations will only happen after user confirms Bengali transcription
-    console.log(`Video transcription completed. Waiting for user confirmation before translation.`);
+    console.log(`[PROCESS] Video transcription completed. Waiting for user confirmation before translation.`);
     
     await storage.updateVideoStatus(videoId, "completed");
-    console.log(`Video processing completed for ID: ${videoId}`);
+    console.log(`[PROCESS] Video processing completed for ID: ${videoId}`);
   } catch (error) {
-    console.error(`Processing failed for video ${videoId}:`, error);
+    console.error(`[PROCESS] Processing failed for video ${videoId}:`, error);
+    console.error(`[PROCESS] Error details:`, error instanceof Error ? error.stack : error);
     await storage.updateVideoStatus(videoId, "failed");
   }
 }

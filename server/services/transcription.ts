@@ -10,25 +10,34 @@ const execAsync = promisify(exec);
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_API_KEY || "";
 
 export async function transcribeVideo(videoId: number) {
+  console.log(`[TRANSCRIBE] Starting transcription for video ${videoId}`);
   const video = await storage.getVideo(videoId);
   if (!video) {
     throw new Error("Video not found");
   }
 
+  console.log(`[TRANSCRIBE] Video found: ${video.originalName} at ${video.filePath}`);
+
   // Extract audio from video using ffmpeg
+  console.log(`[TRANSCRIBE] Extracting audio...`);
   const audioPath = await extractAudio(video.filePath);
+  console.log(`[TRANSCRIBE] Audio extracted to: ${audioPath}`);
   
   // Get video duration
   const duration = await getVideoDuration(video.filePath);
+  console.log(`[TRANSCRIBE] Video duration: ${duration} seconds`);
   await storage.updateVideoDuration(videoId, duration);
 
-  // Try ElevenLabs first, fallback to OpenAI if it fails
+  // Try transcription
   let transcriptionResult;
   try {
+    console.log(`[TRANSCRIBE] Starting audio transcription...`);
     transcriptionResult = await transcribeAudio(audioPath);
-  } catch (elevenLabsError) {
-    console.error('ElevenLabs failed, trying OpenAI Whisper:', elevenLabsError);
-    transcriptionResult = await transcribeWithOpenAI(audioPath);
+    console.log(`[TRANSCRIBE] Transcription result:`, transcriptionResult);
+  } catch (error) {
+    console.error('[TRANSCRIBE] Transcription failed:', error);
+    console.error('[TRANSCRIBE] Error stack:', error instanceof Error ? error.stack : error);
+    throw error;
   }
   
   // Create transcription segments
@@ -48,20 +57,22 @@ export async function transcribeVideo(videoId: number) {
     });
     transcriptions.push(transcription);
   } else {
+    // Create individual transcriptions from segments
     for (const segment of transcriptionResult.segments) {
       const transcription = await storage.createTranscription({
         videoId,
         language: "bn", // Bengali
         text: segment.text,
-      startTime: segment.start,
-      endTime: segment.end,
-      confidence: segment.confidence,
-      isOriginal: true,
-    });
-    transcriptions.push(transcription);
+        startTime: segment.start,
+        endTime: segment.end,
+        confidence: segment.confidence || 0.9,
+        isOriginal: true,
+      });
+      transcriptions.push(transcription);
+    }
   }
 
-  // Clean up temporary audio file
+  // Clean up audio file
   fs.unlinkSync(audioPath);
 
   return transcriptions;
@@ -81,76 +92,33 @@ async function getVideoDuration(videoPath: string): Promise<number> {
 }
 
 async function transcribeAudio(audioPath: string) {
-  console.log('Starting ElevenLabs transcription...');
-  console.log('API Key available:', !!ELEVENLABS_API_KEY);
+  console.log('Starting transcription...');
+  console.log('ElevenLabs API Key available:', !!ELEVENLABS_API_KEY);
   console.log('Audio file exists:', fs.existsSync(audioPath));
   
-  // For now, skip ElevenLabs and use OpenAI directly
-  throw new Error("Switching to OpenAI Whisper");
-
-  const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-    method: 'POST',
-    headers: {
-      'xi-api-key': ELEVENLABS_API_KEY,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('ElevenLabs API Error:', response.status, response.statusText, errorText);
-    throw new Error(`ElevenLabs transcription failed: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const result = await response.json();
-  console.log('ElevenLabs API response:', result);
-  
-  // Convert to our expected format
-  return {
-    segments: result.segments?.map((segment: any) => ({
-      text: segment.text,
-      start: segment.start,
-      end: segment.end,
-      confidence: segment.confidence || 0.9,
-    })) || [{
-      text: result.text || "No transcription available",
-      start: 0,
-      end: 10,
-      confidence: 0.9,
-    }],
-  };
+  // Use OpenAI Whisper
+  return transcribeWithOpenAI(audioPath);
 }
 
-// Fallback transcription using OpenAI Whisper
+// Transcription using OpenAI Whisper
 async function transcribeWithOpenAI(audioPath: string) {
   try {
+    console.log('[OPENAI] Starting OpenAI Whisper transcription');
     const { default: OpenAI } = await import('openai');
     
     if (!process.env.OPENAI_API_KEY) {
-      console.log('No OPENAI_API_KEY found, using demo transcription');
-      // Return demo Bengali transcription for testing
-      return {
-        text: "আমি বাংলা ভাষায় একটি ভিডিও তৈরি করছি। এটি একটি সুন্দর প্রাকৃতিক দৃশ্য সম্পর্কে।",
-        segments: [{
-          text: "আমি বাংলা ভাষায় একটি ভিডিও তৈরি করছি।",
-          start: 0,
-          end: 3,
-          confidence: 0.95
-        }, {
-          text: "এটি একটি সুন্দর প্রাকৃতিক দৃশ্য সম্পর্কে।",
-          start: 3,
-          end: 6,
-          confidence: 0.95
-        }]
-      };
+      console.error('[OPENAI] No OPENAI_API_KEY found');
+      throw new Error('OpenAI API key is required for transcription');
     }
     
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     
-    console.log('Using OpenAI Whisper for transcription...');
+    console.log('[OPENAI] Creating audio stream from:', audioPath);
+    console.log('[OPENAI] File size:', fs.statSync(audioPath).size, 'bytes');
     
     const audioReadStream = fs.createReadStream(audioPath);
     
+    console.log('[OPENAI] Sending to OpenAI Whisper API...');
     const transcription = await openai.audio.transcriptions.create({
       file: audioReadStream,
       model: 'whisper-1',
@@ -158,7 +126,9 @@ async function transcribeWithOpenAI(audioPath: string) {
       response_format: 'verbose_json'
     });
     
-    console.log('OpenAI Whisper transcription result:', transcription.text?.substring(0, 50) + '...');
+    console.log('[OPENAI] Whisper API response received');
+    console.log('[OPENAI] Text length:', transcription.text?.length || 0);
+    console.log('[OPENAI] First 100 chars:', transcription.text?.substring(0, 100) + '...');
     
     // Convert to our expected format
     return {
@@ -177,21 +147,7 @@ async function transcribeWithOpenAI(audioPath: string) {
     };
   } catch (error) {
     console.error('Transcription error:', error);
-    // Return demo Bengali transcription for testing
-    return {
-      text: "আমি বাংলা ভাষায় একটি ভিডিও তৈরি করছি। এটি একটি সুন্দর প্রাকৃতিক দৃশ্য সম্পর্কে।",
-      segments: [{
-        text: "আমি বাংলা ভাষায় একটি ভিডিও তৈরি করছি।",
-        start: 0,
-        end: 3,
-        confidence: 0.95
-      }, {
-        text: "এটি একটি সুন্দর প্রাকৃতিক দৃশ্য সম্পর্কে।",
-        start: 3,
-        end: 6,
-        confidence: 0.95
-      }]
-    };
+    // Throw the error instead of returning demo data
+    throw error;
   }
-}
 }

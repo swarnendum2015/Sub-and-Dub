@@ -136,6 +136,21 @@ export function EditableTranscriptionPanel({
   const currentSegment = getCurrentSegment();
 
   // Mutations
+  const confirmBengaliMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/videos/${videoId}/confirm-transcription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to confirm Bengali transcription');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
+      toast({ title: "Bengali transcription confirmed" });
+    },
+  });
+
   const updateTranscriptionMutation = useMutation({
     mutationFn: async ({ id, text }: { id: number; text: string }) => {
       const response = await fetch(`/api/transcriptions/${id}`, {
@@ -318,12 +333,27 @@ export function EditableTranscriptionPanel({
                 if (lang === 'bn') {
                   if (!bengaliConfirmed) {
                     return (
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Please review and confirm the Bengali transcription before proceeding with translations.
-                        </AlertDescription>
-                      </Alert>
+                      <div className="space-y-3">
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Please review and confirm the Bengali transcription before proceeding with translations.
+                          </AlertDescription>
+                        </Alert>
+                        <Button 
+                          size="sm" 
+                          onClick={() => confirmBengaliMutation.mutate()}
+                          disabled={confirmBengaliMutation.isPending}
+                          className="w-full bg-green-600 hover:bg-green-700"
+                        >
+                          {confirmBengaliMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                          )}
+                          Confirm Bengali Transcription
+                        </Button>
+                      </div>
                     );
                   }
                   return null; // Bengali content is shown in the main section

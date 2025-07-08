@@ -27,10 +27,47 @@ function getDemoTranslation(text: string, targetLanguage: string) {
     }
   };
   
-  const translatedText = demoTranslations[text]?.[targetLanguage] || `[Demo ${targetLanguage}]: ${text}`;
+  // If exact match found, return it
+  if (demoTranslations[text]?.[targetLanguage]) {
+    return {
+      text: demoTranslations[text][targetLanguage],
+      confidence: 0.95,
+      model: "demo"
+    };
+  }
+  
+  // For English, try basic word-by-word translation
+  if (targetLanguage === 'en') {
+    const bengaliToEnglish: Record<string, string> = {
+      "অ্যাঁ": "Yes",
+      "অবশ্যই": "definitely", 
+      "এটা": "this",
+      "একটা": "a",
+      "অসম্ভব": "incredible",
+      "ভালো": "good",
+      "ছবি": "picture",
+      "থ্যাঙ্ক": "Thank",
+      "ইউ": "you",
+      "খুব": "very",
+      "সুন্দর": "beautiful"
+    };
+    
+    let translatedText = text;
+    Object.entries(bengaliToEnglish).forEach(([bengali, english]) => {
+      translatedText = translatedText.replace(new RegExp(bengali, 'g'), english);
+    });
+    
+    return {
+      text: translatedText,
+      confidence: 0.75,
+      model: "demo"
+    };
+  }
+  
+  // For other languages, provide demo text
   return {
-    text: translatedText,
-    confidence: 0.85,
+    text: `[Demo ${targetLanguage} translation of: ${text.substring(0, 30)}...]`,
+    confidence: 0.65,
     model: "demo"
   };
 }

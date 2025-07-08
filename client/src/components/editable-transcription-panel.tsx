@@ -67,6 +67,8 @@ export function EditableTranscriptionPanel({
     },
     enabled: transcriptions.length > 0,
     refetchInterval: translatingLanguages.size > 0 ? 3000 : false,
+    staleTime: 0,
+    gcTime: 0,
   });
   
   // Update transcription mutation
@@ -261,7 +263,12 @@ export function EditableTranscriptionPanel({
   // Get translations for current language
   const getTranslationsForLanguage = (transcriptionId: number) => {
     const translations = allTranslations[transcriptionId] || [];
-    return translations.find((t: Translation) => t.targetLanguage === currentLanguage);
+    const translation = translations.find((t: Translation) => t.targetLanguage === currentLanguage);
+    // Clear any cached Bengali text from translations
+    if (translation && currentLanguage !== 'bn') {
+      return translation;
+    }
+    return translation;
   };
   
   // Check if translations are complete for a language
@@ -581,7 +588,9 @@ export function EditableTranscriptionPanel({
                   <p className={`text-sm ${
                     isCurrentSegment ? "text-slate-900 font-medium" : "text-slate-700"
                   }`}>
-                    {currentLanguage === 'bn' ? transcription.text : displayItem?.translatedText}
+                    {currentLanguage === 'bn' 
+                      ? transcription.text 
+                      : (displayItem as any)?.translatedText || 'Translation not available'}
                   </p>
                 )}
               </Card>

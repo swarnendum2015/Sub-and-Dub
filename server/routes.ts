@@ -8,6 +8,7 @@ import { insertVideoSchema } from "@shared/schema";
 import { transcribeVideo } from "./services/transcription";
 import { translateText } from "./services/translation";
 import { generateDubbing } from "./services/dubbing";
+import { generateSRT } from "./routes/srt";
 
 const upload = multer({
   dest: "uploads/",
@@ -326,6 +327,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export SRT subtitles
+  app.get("/api/videos/:id/srt", generateSRT);
+
   const httpServer = createServer(app);
   return httpServer;
 }
@@ -371,6 +375,18 @@ async function processVideo(videoId: number) {
   } catch (error) {
     console.error(`[PROCESS] Processing failed for video ${videoId}:`, error);
     console.error(`[PROCESS] Error details:`, error instanceof Error ? error.stack : error);
+    
+    // Store error message for UI display
+    let errorMessage = "Processing failed";
+    if (error instanceof Error) {
+      if (error.message.includes('QUOTA_EXCEEDED')) {
+        errorMessage = "API quota exceeded. Please check your OpenAI billing.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     await storage.updateVideoStatus(videoId, "failed");
+    // Store error in video metadata (we'll need to add this field)
   }
 }

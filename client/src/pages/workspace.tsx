@@ -194,6 +194,11 @@ function WorkspaceContent() {
                   variant="ghost"
                   className="w-full justify-start"
                   size="sm"
+                  disabled={!video || video.status !== 'completed' || (transcriptions?.length || 0) === 0}
+                  onClick={() => {
+                    const language = currentLanguage === 'bn' ? '' : `?language=${currentLanguage}`;
+                    window.open(`/api/videos/${videoId}/srt${language}`, '_blank');
+                  }}
                 >
                   <Download className="w-4 h-4 mr-3" />
                   Download SRT Files

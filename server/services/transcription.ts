@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
+import { transcribeWithGemini, combineTranscriptionResults } from "./transcription-gemini";
 
 const execAsync = promisify(exec);
 
@@ -28,15 +29,52 @@ export async function transcribeVideo(videoId: number) {
   console.log(`[TRANSCRIBE] Video duration: ${duration} seconds`);
   await storage.updateVideoDuration(videoId, duration);
 
-  // Try transcription
+  // Try multi-model transcription for higher confidence
   let transcriptionResult;
   try {
-    console.log(`[TRANSCRIBE] Starting audio transcription...`);
-    transcriptionResult = await transcribeAudio(audioPath);
-    console.log(`[TRANSCRIBE] Transcription result:`, transcriptionResult);
+    console.log(`[TRANSCRIBE] Starting multi-model audio transcription...`);
+    
+    // Try OpenAI first
+    let openaiResult = null;
+    let geminiResult = null;
+    
+    try {
+      console.log(`[TRANSCRIBE] Attempting OpenAI Whisper transcription...`);
+      openaiResult = await transcribeWithOpenAI(audioPath);
+    } catch (openaiError) {
+      console.error('[TRANSCRIBE] OpenAI transcription failed:', openaiError);
+      if (openaiError instanceof Error && openaiError.message.includes('429')) {
+        console.log('[TRANSCRIBE] OpenAI quota exceeded, falling back to Gemini...');
+      }
+    }
+    
+    // Try Gemini as well (or as fallback)
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        console.log(`[TRANSCRIBE] Attempting Gemini transcription...`);
+        geminiResult = await transcribeWithGemini(audioPath);
+      } catch (geminiError) {
+        console.error('[TRANSCRIBE] Gemini transcription failed:', geminiError);
+      }
+    }
+    
+    // Combine results or use whichever succeeded
+    if (openaiResult && geminiResult) {
+      console.log(`[TRANSCRIBE] Both models succeeded, combining results...`);
+      transcriptionResult = combineTranscriptionResults(openaiResult, geminiResult);
+    } else if (openaiResult) {
+      console.log(`[TRANSCRIBE] Using OpenAI result only`);
+      transcriptionResult = openaiResult;
+    } else if (geminiResult) {
+      console.log(`[TRANSCRIBE] Using Gemini result only`);
+      transcriptionResult = geminiResult;
+    } else {
+      throw new Error('Both transcription services failed. Please check your API keys and quotas.');
+    }
+    
+    console.log(`[TRANSCRIBE] Transcription completed successfully`);
   } catch (error) {
-    console.error('[TRANSCRIBE] Transcription failed:', error);
-    console.error('[TRANSCRIBE] Error stack:', error instanceof Error ? error.stack : error);
+    console.error('[TRANSCRIBE] Multi-model transcription failed:', error);
     throw error;
   }
   

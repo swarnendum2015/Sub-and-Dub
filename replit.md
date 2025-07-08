@@ -31,9 +31,15 @@ This is a full-stack web application for video dubbing and translation. The plat
 
 ### Video Processing Pipeline
 1. **Upload**: Video files are uploaded and validated (MP4, MOV, AVI, MKV formats, max 500MB)
-2. **Transcription**: Audio extraction using FFmpeg, transcription via ElevenLabs API
-3. **Translation**: Multi-model translation using OpenAI, Google Translate, and Azure Translator
-4. **Dubbing**: AI voice generation using ElevenLabs Dubbing Studio
+2. **Multi-Model Transcription**: 
+   - Audio extraction using FFmpeg
+   - Parallel transcription using OpenAI Whisper and Gemini 2.5 Pro
+   - Automatic fallback on API quota errors
+   - Combined results for higher confidence
+3. **Bengali Confirmation**: Users must review and confirm Bengali transcription before proceeding
+4. **Translation**: Multi-model translation using OpenAI, Google Translate, and Azure Translator
+5. **Dubbing**: AI voice generation using ElevenLabs Dubbing Studio
+6. **SRT Export**: Generate subtitle files in any supported language
 
 ### Storage Strategy
 - **Database**: PostgreSQL with Drizzle ORM for persistent data storage
@@ -41,7 +47,12 @@ This is a full-stack web application for video dubbing and translation. The plat
 - **File Management**: Local file system with organized upload directories
 
 ### AI/ML Integrations
-- **ElevenLabs**: Transcription and voice synthesis
+- **Multi-Model Transcription**: 
+  - **OpenAI Whisper**: Primary transcription service
+  - **Gemini 2.5 Pro**: Secondary transcription and fallback service
+  - Automatic fallback when OpenAI quota is exceeded
+  - Result combination for higher confidence
+- **ElevenLabs**: Voice synthesis and dubbing
 - **OpenAI**: Translation services
 - **Google Translate**: Additional translation validation
 - **Azure Translator**: Translation confidence scoring
@@ -114,6 +125,14 @@ Changelog:
   - Enhanced error handling for API quota issues
   - Added automatic retry functionality for failed videos
   - Improved processing status page with real-time verification
+
+- July 08, 2025. Multi-model transcription and SRT export
+  - Implemented multi-model transcription using OpenAI Whisper + Gemini 2.5 Pro
+  - Added automatic fallback when OpenAI quota is exceeded
+  - Created SRT subtitle export functionality for all languages
+  - Combined transcription results for higher confidence
+  - Fixed demo Bengali text issue - now returns actual transcriptions
+  - Improved error messages for quota exceeded scenarios
 ```
 
 ## User Preferences

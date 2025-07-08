@@ -104,12 +104,12 @@ export default function LandingPage() {
               throw new Error('Failed to start processing');
             }
             
-            // Navigate to processing status page
-            setLocation(`/processing/${videoId}`);
+            // Navigate to workflow selection page
+            setLocation(`/select-workflow/${videoId}`);
           } catch (error) {
             console.error('Processing error:', error);
-            // If processing fails, still navigate to workspace
-            setLocation(`/workspace/${videoId}`);
+            // If processing fails, navigate to workflow selection
+            setLocation(`/select-workflow/${videoId}`);
           }
         } else {
           throw new Error(xhr.responseText);

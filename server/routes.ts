@@ -209,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate dubbing for a video
+  // Generate dubbing for a video using ElevenLabs Dubbing Studio
   app.post("/api/videos/:id/dubbing", async (req, res) => {
     try {
       const { language, voiceId } = req.body;
@@ -219,17 +219,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const dubbingJob = await storage.createDubbingJob({
         videoId: parseInt(req.params.id),
-        language,
+        language: language,
+        voiceId: voiceId || undefined,
         status: "pending",
       });
 
-      // Store voiceId in global map for the dubbing job (temporary solution)
-      const dubbingVoiceMap = global.dubbingVoiceMap || new Map();
-      dubbingVoiceMap.set(dubbingJob.id, voiceId || "21m00Tcm4TlvDq8ikWAM");
-      global.dubbingVoiceMap = dubbingVoiceMap;
+      console.log(`[DUBBING] Starting ElevenLabs Dubbing Studio for job ${dubbingJob.id}`);
 
-      // Start background dubbing process
-      generateDubbingSimple(dubbingJob.id);
+      // Start background dubbing process using ElevenLabs Dubbing Studio
+      const { generateDubbingWithStudio } = await import('./services/dubbing-elevenlabs');
+      generateDubbingWithStudio({ dubbingJobId: dubbingJob.id }).catch(console.error);
 
       res.json(dubbingJob);
     } catch (error) {
@@ -358,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Translate video to specific language
+  // Translate video to specific language using batch processing
   app.post("/api/videos/:id/translate", async (req: Request, res: Response) => {
     const videoId = parseInt(req.params.id);
     const { targetLanguage } = req.body;
@@ -368,22 +367,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     try {
-      const video = await storage.getVideo(videoId);
-      if (!video) {
-        return res.status(404).json({ error: "Video not found" });
-      }
+      console.log(`[TRANSLATE] Starting batch translation for video ${videoId} to ${targetLanguage}`);
       
-      const transcriptions = await storage.getTranscriptionsByVideoId(videoId);
+      // Use the new batch translation service
+      const { translateVideoBatch } = await import('./services/translation-batch');
+      const translations = await translateVideoBatch({ videoId, targetLanguage });
       
-      // Start translation for each transcription
-      for (const transcription of transcriptions) {
-        translateText(transcription.id, targetLanguage).catch(console.error);
-      }
+      res.json({ 
+        message: `Batch translation completed for ${translations.length} segments`,
+        translations 
+      });
       
-      res.json({ message: `Translation to ${targetLanguage} started`, videoId });
     } catch (error) {
-      console.error("Error starting translation:", error);
-      res.status(500).json({ error: "Failed to start translation" });
+      console.error("Batch translation error:", error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Translation failed" 
+      });
     }
   });
 

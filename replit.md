@@ -176,6 +176,15 @@ Changelog:
   - Implemented re-verification buttons for individual translation segments
   - Added retranslation API endpoint for refreshing specific transcription translations
   - Optimized UI with hover-based re-verification and edit controls for better user experience
+
+- July 08, 2025. Performance Optimization: Batch Translation and ElevenLabs Dubbing Studio
+  - Implemented batch translation service to process entire Bengali text in one API call instead of individual segments
+  - Replaced individual segment translation with optimized batch processing using Gemini 2.5 Pro
+  - Created ElevenLabs Dubbing Studio integration for authentic audio dubbing from original video files
+  - Replaced TTS-based dubbing with ElevenLabs dubbing studio API for higher quality output
+  - Enhanced translation performance by sending complete confirmed Bengali text to translation models
+  - Added automatic polling and status tracking for ElevenLabs dubbing studio jobs
+  - Improved overall system performance and reduced API call overhead for translation workflows
 ```
 
 ## User Preferences

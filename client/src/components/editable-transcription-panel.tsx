@@ -57,21 +57,30 @@ export function EditableTranscriptionPanel({
   });
 
   const { data: allTranslations = [] } = useQuery({
-    queryKey: ['/api/translations', videoId],
+    queryKey: ['/api/translations', videoId, transcriptions.map(t => t.id).join(',')],
     queryFn: async () => {
       if (!transcriptions.length) return [];
       
       const translationPromises = transcriptions.map(async (transcription: Transcription) => {
-        const response = await fetch(`/api/transcriptions/${transcription.id}/translations`);
-        if (!response.ok) return [];
-        const translationsData = await response.json();
-        return translationsData.map((t: Translation) => ({ ...t, transcriptionId: transcription.id }));
+        try {
+          const response = await fetch(`/api/transcriptions/${transcription.id}/translations`);
+          if (!response.ok) {
+            console.error(`Failed to fetch translation for transcription ${transcription.id}:`, response.statusText);
+            return [];
+          }
+          const translationsData = await response.json();
+          return translationsData.map((t: Translation) => ({ ...t, transcriptionId: transcription.id }));
+        } catch (error) {
+          console.error(`Failed to fetch translation for transcription ${transcription.id}:`, error);
+          return [];
+        }
       });
       
       const allTranslations = await Promise.all(translationPromises);
       return allTranslations.flat();
     },
     enabled: !!videoId && transcriptions.length > 0,
+    refetchInterval: 2000, // Refetch every 2 seconds to catch new translations
   });
 
   const { data: dubbingJobs = [] } = useQuery({
@@ -148,8 +157,7 @@ export function EditableTranscriptionPanel({
     onSuccess: () => {
       // Invalidate video data to update bengaliConfirmed status
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
-      // Force refresh to update the UI state
-      window.location.reload();
+      toast({ title: "Bengali transcription confirmed" });
     },
   });
 
@@ -219,12 +227,14 @@ export function EditableTranscriptionPanel({
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate all translation-related queries
-      queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
+      // Invalidate all translation-related queries with wildcard matching
+      queryClient.invalidateQueries({ queryKey: ['/api/translations'] });
       // Also invalidate individual transcription translation queries
       transcriptions.forEach((transcription: Transcription) => {
         queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${transcription.id}/translations`] });
       });
+      // Force refetch of translations
+      queryClient.refetchQueries({ queryKey: ['/api/translations', videoId] });
       toast({ title: "Translation completed successfully" });
     },
   });
@@ -364,8 +374,16 @@ export function EditableTranscriptionPanel({
                         </Button>
                       </div>
                     );
+                  } else {
+                    return (
+                      <div className="flex items-center space-x-2 p-3 bg-green-50 rounded-lg">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <span className="text-sm text-green-800">
+                          Bengali transcription confirmed and ready for translation
+                        </span>
+                      </div>
+                    );
                   }
-                  return null; // Bengali content is shown in the main section
                 }
                 
                 // Translation languages
@@ -388,7 +406,7 @@ export function EditableTranscriptionPanel({
                         size="sm" 
                         onClick={() => translateMutation.mutate(lang)}
                         disabled={translateMutation.isPending || !bengaliConfirmed}
-                        className="w-full"
+                        className={`w-full ${!bengaliConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {translateMutation.isPending ? (
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -397,6 +415,12 @@ export function EditableTranscriptionPanel({
                         )}
                         {status === 'none' ? 'Generate' : 'Complete'} {getLanguageName(lang)} Translation
                       </Button>
+                      
+                      {!bengaliConfirmed && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Please confirm Bengali transcription first
+                        </p>
+                      )}
                     </div>
                   );
                 }

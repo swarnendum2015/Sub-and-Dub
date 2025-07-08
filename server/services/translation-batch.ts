@@ -19,6 +19,17 @@ async function translateBatchWithOpenAI(batchText: string, targetLanguage: strin
   });
   
   const data = await response.json();
+  
+  if (!response.ok) {
+    console.error('[BATCH_TRANSLATE] OpenAI API error:', data);
+    throw new Error(`OpenAI API error: ${data.error?.message || 'Unknown error'}`);
+  }
+  
+  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    console.error('[BATCH_TRANSLATE] Unexpected OpenAI response format:', data);
+    throw new Error('Unexpected OpenAI response format');
+  }
+  
   return data.choices[0].message.content;
 }
 
@@ -85,7 +96,12 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
       translatedBatch = await translateBatchWithGemini(batchText, targetLanguage);
     } catch (error) {
       console.error('[BATCH_TRANSLATE] Gemini failed, using OpenAI fallback:', error);
-      translatedBatch = await translateBatchWithOpenAI(batchText, targetLanguage);
+      try {
+        translatedBatch = await translateBatchWithOpenAI(batchText, targetLanguage);
+      } catch (openaiError) {
+        console.error('[BATCH_TRANSLATE] Both Gemini and OpenAI failed:', openaiError);
+        throw new Error(`Translation failed: Gemini (${error.message}) and OpenAI (${openaiError.message}) both unavailable`);
+      }
     }
     
     // Parse the translated batch back into individual segments

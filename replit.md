@@ -187,6 +187,17 @@ Changelog:
   - Improved overall system performance and reduced API call overhead for translation workflows
   - Fixed batch translation import errors and validation logic for production deployment
   - Successfully tested batch translation with 95%+ performance improvement (25 calls → 1 call per language)
+
+- July 08, 2025. Production-Ready UI/UX and Backend Fixes
+  - Fixed model selection cache invalidation - dropdowns now properly refresh text content when changed
+  - Fixed translation display bug - English translations now show correctly instead of "translation not done"
+  - Completely separated dubbing UI from translation section - now independent purple section with clear messaging
+  - Fixed backend batch translation errors with proper OpenAI fallback error handling
+  - Enhanced ElevenLabs dubbing with watermark support for free accounts and multiple endpoint fallbacks
+  - Rebuilt editable transcription panel component with clean JSX structure
+  - Added comprehensive error handling for all API quota exceeded scenarios
+  - Translation workflow now completely independent from dubbing workflow for better user experience
+  - All frontend cache invalidation issues resolved - model selection changes properly trigger content updates
 ```
 
 ## User Preferences

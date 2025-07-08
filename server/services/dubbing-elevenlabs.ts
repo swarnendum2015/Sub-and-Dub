@@ -191,14 +191,38 @@ async function pollDubbingCompletion(dubbingId: string, jobId: number): Promise<
 async function downloadDubbedAudio(dubbingId: string, jobId: number): Promise<string> {
   console.log(`[DUBBING_STUDIO] Downloading dubbed audio for: ${dubbingId}`);
   
-  const response = await fetch(`https://api.elevenlabs.io/v1/dubbing/${dubbingId}/audio/dubbed`, {
-    headers: {
-      'xi-api-key': ELEVENLABS_API_KEY,
-    },
-  });
+  // Try different endpoint formats for download
+  const endpoints = [
+    `https://api.elevenlabs.io/v1/dubbing/${dubbingId}/audio/dubbed`,
+    `https://api.elevenlabs.io/v1/dubbing/${dubbingId}/download`,
+    `https://api.elevenlabs.io/v1/dubbing/${dubbingId}/audio`
+  ];
   
-  if (!response.ok) {
-    throw new Error(`Audio download failed: ${response.status}`);
+  let response;
+  let lastError;
+  
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`[DUBBING_STUDIO] Trying download endpoint: ${endpoint}`);
+      response = await fetch(endpoint, {
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+        },
+      });
+      
+      if (response.ok) {
+        console.log(`[DUBBING_STUDIO] Successfully downloaded from: ${endpoint}`);
+        break;
+      }
+      lastError = `${endpoint}: ${response.status}`;
+    } catch (error) {
+      lastError = `${endpoint}: ${error}`;
+      console.log(`[DUBBING_STUDIO] Failed endpoint: ${lastError}`);
+    }
+  }
+  
+  if (!response || !response.ok) {
+    throw new Error(`Audio download failed from all endpoints: ${lastError}`);
   }
   
   const audioBuffer = await response.arrayBuffer();

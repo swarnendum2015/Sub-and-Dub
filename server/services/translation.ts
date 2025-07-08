@@ -1,8 +1,13 @@
 import { storage } from "../storage";
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "" 
+});
+
+const gemini = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || "" 
 });
 
 const GOOGLE_TRANSLATE_API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || "";
@@ -36,69 +41,13 @@ function getDemoTranslation(text: string, targetLanguage: string) {
     };
   }
   
-  // For English, return actual English translation not Bengali
+  // For English, use Gemini 2.5 Pro for high-quality translation
   if (targetLanguage === 'en') {
-    // CRITICAL: Never return Bengali text for English translations
-    // This is a demo translation - always return English text
-    const bengaliPhrases: Record<string, string> = {
-      "অঞ্জন দত্তর পরিচালনায়": "directed by Anjan Dutta",
-      "চারচিত্র এখন": "Charchitra Ekhon",
-      "সিনেমাটা": "the movie",
-      "অলরেডি বেরিয়ে গেছে": "has already been released",
-      "ভিন্ন সিনেমা": "a different cinema",
-      "আপনারা সবাই": "all of you",
-      "অলরেডি জানেন": "already know",
-      "বেরিয়েছে": "has been released",
-      "হইচই-এ": "on Hoichoi",
-      "সিলেক্টেড থিয়েটারস": "selected theaters",
-      "যেখানে পারেন": "wherever you can",
-      "দেখে নিন প্লিজ": "please watch it",
-      "এক্সাইটেড": "excited",
-      "আপনাদের দেখানোর জন্য": "to show you"
-    };
-    
-    let translatedText = text;
-    
-    // First try phrase-level replacements
-    Object.entries(bengaliPhrases).forEach(([bengali, english]) => {
-      translatedText = translatedText.replace(new RegExp(bengali, 'g'), english);
-    });
-    
-    // If still mostly Bengali, we need to provide proper translations
-    const bengaliCharPattern = /[\u0980-\u09FF]/;
-    if (bengaliCharPattern.test(translatedText)) {
-      // Specific translations for the video content
-      const specificTranslations: Record<string, string> = {
-        "অঞ্জন দত্তর পরিচালনায় চারচিত্র এখন সিনেমাটা অলরেডি বেরিয়ে গেছে, ভিন্ন সিনেমা।": "The movie 'Chalchitra Ekhon' directed by Anjan Dutta has already been released, it's a different cinema.",
-        "আপনারা সবাই অলরেডি জানেন।": "All of you already know.",
-        "OTT-তে বেরিয়েছে, হইচই-এ বেরিয়েছে এবং কিছু সিলেক্টেড থিয়েটারস-এ বেরিয়েছে।": "Released on OTT, available on Hoichoi and showing in selected theaters.",
-        "তো আপনারা সবাই যেখানে পারেন সিনেমাটা দেখে নিন প্লিজ।": "So please watch the movie wherever you can.",
-        "আমরা very এক্সাইটেড আপনাদের দেখানোর জন্য সিনেমাটা।": "We are very excited to show you the movie."
-      };
-      
-      if (specificTranslations[text]) {
-        translatedText = specificTranslations[text];
-      } else {
-        // Fallback for unmatched text
-        translatedText = `[Translated from Bengali] ${text.substring(0, 50)}...`;
-      }
-    }
-    
-    console.log(`Demo translation - Original: "${text.substring(0, 50)}..." -> English: "${translatedText.substring(0, 50)}..."`);
-    
-    return {
-      text: translatedText,
-      confidence: 0.75,
-      model: "demo"
-    };
+    return translateWithGemini(text, 'en');
   }
   
-  // For other languages, provide demo text
-  return {
-    text: `[Demo ${targetLanguage} translation of: ${text.substring(0, 30)}...]`,
-    confidence: 0.65,
-    model: "demo"
-  };
+  // For other languages, use Gemini 2.5 Pro as well
+  return translateWithGemini(text, targetLanguage);
 }
 
 export async function translateText(transcriptionId: number, targetLanguage: string) {

@@ -4,6 +4,7 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import { transcribeWithGemini, combineTranscriptionResults } from "./transcription-gemini";
+import { transcribeWithElevenLabs } from "./transcription-elevenlabs";
 
 const execAsync = promisify(exec);
 
@@ -39,6 +40,7 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
     
     let openaiResult = null;
     let geminiResult = null;
+    let elevenlabsResult = null;
     
     // Try OpenAI if selected
     if (modelsToUse.includes('openai')) {
@@ -63,18 +65,34 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
       }
     }
     
-    // Combine results if both models were used and succeeded
-    if (openaiResult && geminiResult && modelsToUse.length === 2) {
-      console.log(`[TRANSCRIBE] Both models succeeded, combining results...`);
-      transcriptionResult = combineTranscriptionResults(openaiResult, geminiResult);
-    } else if (openaiResult) {
-      console.log(`[TRANSCRIBE] Using OpenAI result`);
-      transcriptionResult = openaiResult;
-    } else if (geminiResult) {
-      console.log(`[TRANSCRIBE] Using Gemini result`);
-      transcriptionResult = geminiResult;
-    } else {
+    // Try ElevenLabs if selected
+    if (modelsToUse.includes('elevenlabs') && process.env.ELEVENLABS_API_KEY) {
+      try {
+        console.log(`[TRANSCRIBE] Attempting ElevenLabs transcription...`);
+        elevenlabsResult = await transcribeWithElevenLabs(audioPath);
+      } catch (elevenlabsError) {
+        console.error('[TRANSCRIBE] ElevenLabs transcription failed:', elevenlabsError);
+      }
+    }
+    
+    // Use the best available result
+    const results = [openaiResult, geminiResult, elevenlabsResult].filter(Boolean);
+    
+    if (results.length === 0) {
       throw new Error('All selected transcription services failed. Please check your API keys and quotas.');
+    } else if (results.length === 1) {
+      console.log(`[TRANSCRIBE] Using single result from available service`);
+      transcriptionResult = results[0];
+    } else {
+      console.log(`[TRANSCRIBE] Multiple results available, combining...`);
+      // For now, prioritize OpenAI > Gemini > ElevenLabs
+      if (openaiResult) {
+        transcriptionResult = openaiResult;
+      } else if (geminiResult) {
+        transcriptionResult = geminiResult;
+      } else {
+        transcriptionResult = elevenlabsResult;
+      }
     }
     
     console.log(`[TRANSCRIBE] Transcription completed successfully`);

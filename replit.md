@@ -136,6 +136,15 @@ Changelog:
   - Modified translation flow - now requires manual trigger instead of automatic
   - Added translation progress tracking with real-time updates
   - Implemented per-language translation status and completion detection
+
+- July 08, 2025. Production-ready translation rebuild and ElevenLabs STT
+  - Added ElevenLabs as third STT option alongside OpenAI Whisper and Gemini 2.5 Pro
+  - Rebuilt translation service using Gemini 2.5 Pro for all languages
+  - Fixed critical bug showing "[Translated from Bengali]" with Bengali text instead of English
+  - Cleaned corrupted translation data from database
+  - Enhanced error handling and fallback mechanisms for translation failures
+  - Updated model selection UI to include ElevenLabs STT option
+  - Improved translation workflow with proper state management and user feedback
 ```
 
 ## User Preferences

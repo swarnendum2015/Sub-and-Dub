@@ -6,7 +6,7 @@ import fs from "fs";
 import { storage } from "./storage";
 import { insertVideoSchema } from "@shared/schema";
 import { transcribeVideo } from "./services/transcription";
-import { translateText } from "./services/translation";
+import { translateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
 

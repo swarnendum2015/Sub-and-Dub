@@ -230,6 +230,22 @@ export default function LandingPage() {
                   Gemini 2.5 Pro
                 </Label>
               </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="elevenlabs" 
+                  checked={selectedModels.includes('elevenlabs')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedModels([...selectedModels, 'elevenlabs']);
+                    } else {
+                      setSelectedModels(selectedModels.filter(m => m !== 'elevenlabs'));
+                    }
+                  }}
+                />
+                <Label htmlFor="elevenlabs" className="text-sm font-normal cursor-pointer">
+                  ElevenLabs STT
+                </Label>
+              </div>
             </div>
             {selectedModels.length === 0 && (
               <p className="text-sm text-red-600 mt-2">Please select at least one model</p>

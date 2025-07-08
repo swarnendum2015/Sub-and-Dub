@@ -320,6 +320,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Download dubbing audio
+  app.get("/api/videos/:videoId/dubbing/:dubbingId/download", async (req, res) => {
+    try {
+      const dubbingJobs = await storage.getDubbingJobsByVideoId(parseInt(req.params.videoId));
+      const dubbingJob = dubbingJobs.find(job => job.id === parseInt(req.params.dubbingId));
+      
+      if (!dubbingJob || !dubbingJob.audioPath) {
+        return res.status(404).json({ error: "Dubbing not found" });
+      }
+      
+      const audioPath = dubbingJob.audioPath;
+      if (!fs.existsSync(audioPath)) {
+        return res.status(404).json({ error: "Audio file not found" });
+      }
+      
+      const filename = `${dubbingJob.language}_dubbing.mp3`;
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      fs.createReadStream(audioPath).pipe(res);
+    } catch (error) {
+      console.error("Error downloading dubbing:", error);
+      res.status(500).json({ error: "Failed to download dubbing" });
+    }
+  });
+
   // Export SRT subtitles
   app.get("/api/videos/:id/srt", generateSRT);
 

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Mic, Save, Edit, Check, X, Languages, AlertCircle, 
-  Clock, CheckCircle, Loader2 
+  Clock, CheckCircle, Loader2, FileAudio, Download 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -32,6 +32,7 @@ export function EditableTranscriptionPanel({
   const [editingText, setEditingText] = useState("");
   const [bengaliConfirmed, setBengaliConfirmed] = useState(false);
   const [translatingLanguages, setTranslatingLanguages] = useState<Set<string>>(new Set());
+  const [dubbingLanguages, setDubbingLanguages] = useState<Set<string>>(new Set());
   
   // Fetch transcriptions
   const { data: transcriptions = [], isLoading: transcriptionsLoading } = useQuery({
@@ -64,7 +65,7 @@ export function EditableTranscriptionPanel({
       
       return translationMap;
     },
-    enabled: bengaliConfirmed && transcriptions.length > 0,
+    enabled: transcriptions.length > 0,
     refetchInterval: translatingLanguages.size > 0 ? 3000 : false,
   });
   
@@ -170,6 +171,40 @@ export function EditableTranscriptionPanel({
     },
   });
   
+  // Trigger dubbing mutation
+  const triggerDubbingMutation = useMutation({
+    mutationFn: async ({ language }: { language: string }) => {
+      return apiRequest('POST', `/api/videos/${videoId}/dubbing`, { language });
+    },
+    onMutate: (variables) => {
+      setDubbingLanguages(prev => new Set([...prev, variables.language]));
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Dubbing started",
+        description: `Generating ${getLanguageName(variables.language)} audio dubbing...`,
+      });
+    },
+    onError: (error, variables) => {
+      setDubbingLanguages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(variables.language);
+        return newSet;
+      });
+      toast({
+        title: "Dubbing failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Fetch dubbing jobs
+  const { data: dubbingJobs = [] } = useQuery({
+    queryKey: [`/api/videos/${videoId}/dubbing`],
+    refetchInterval: dubbingLanguages.size > 0 ? 3000 : false,
+  });
+  
   const getCurrentSegment = () => {
     return transcriptions.find((t: Transcription) => 
       currentTime >= t.startTime && currentTime <= t.endTime
@@ -257,6 +292,31 @@ export function EditableTranscriptionPanel({
     }
   }, [allTranslations, transcriptions, translatingLanguages, currentLanguage]);
   
+  // Check if dubbing is complete for a language
+  useEffect(() => {
+    if (dubbingLanguages.size > 0 && dubbingJobs) {
+      dubbingLanguages.forEach(lang => {
+        const dubbingJob = dubbingJobs.find((job: any) => job.language === lang);
+        
+        if (dubbingJob && dubbingJob.status === 'completed') {
+          // Remove from dubbing set
+          setDubbingLanguages(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(lang);
+            return newSet;
+          });
+          
+          if (lang === currentLanguage) {
+            toast({
+              title: "Dubbing complete",
+              description: `${getLanguageName(lang)} audio dubbing is ready!`,
+            });
+          }
+        }
+      });
+    }
+  }, [dubbingJobs, dubbingLanguages, currentLanguage]);
+  
   return (
     <div className="flex flex-col h-full">
       {/* Header with Language Tabs */}
@@ -316,7 +376,7 @@ export function EditableTranscriptionPanel({
         </div>
       )}
       
-      {/* Translation Trigger */}
+      {/* Translation/Dubbing Status Bar */}
       {bengaliConfirmed && currentLanguage !== 'bn' && (() => {
         // Check if translations exist for any transcription in current language
         const hasTranslations = transcriptions.some((t: Transcription) => {
@@ -325,41 +385,84 @@ export function EditableTranscriptionPanel({
         });
         
         const isTranslating = translatingLanguages.has(currentLanguage);
+        const isDubbing = dubbingLanguages.has(currentLanguage);
+        const dubbingJob = dubbingJobs.find((job: any) => job.language === currentLanguage);
         
-        if (!hasTranslations && !isTranslating) {
-          return (
-            <div className="p-4 bg-blue-50 border-b border-blue-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-900">
-                  Translate Bengali to {getLanguageName(currentLanguage)}
-                </span>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
-                  disabled={triggerTranslationMutation.isPending}
-                >
-                  <>
+        return (
+          <div className="p-4 bg-slate-50 border-b border-slate-200">
+            <div className="space-y-3">
+              {/* Translation Status */}
+              {!hasTranslations && !isTranslating && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">
+                    No {getLanguageName(currentLanguage)} translation available
+                  </span>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
+                    disabled={triggerTranslationMutation.isPending}
+                  >
                     <Languages className="w-4 h-4 mr-2" />
-                    Translate
-                  </>
-                </Button>
-              </div>
+                    Translate to {getLanguageName(currentLanguage)}
+                  </Button>
+                </div>
+              )}
+              
+              {isTranslating && (
+                <div className="flex items-center justify-between bg-amber-50 p-3 rounded-lg">
+                  <span className="text-sm text-amber-900">
+                    Translating to {getLanguageName(currentLanguage)}...
+                  </span>
+                  <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+                </div>
+              )}
+              
+              {/* Dubbing Status */}
+              {hasTranslations && !dubbingJob && !isDubbing && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-700">
+                    Generate audio dubbing in {getLanguageName(currentLanguage)}
+                  </span>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => triggerDubbingMutation.mutate({ language: currentLanguage })}
+                    disabled={triggerDubbingMutation.isPending}
+                  >
+                    <FileAudio className="w-4 h-4 mr-2" />
+                    Generate Dubbing
+                  </Button>
+                </div>
+              )}
+              
+              {isDubbing && (
+                <div className="flex items-center justify-between bg-purple-50 p-3 rounded-lg">
+                  <span className="text-sm text-purple-900">
+                    Generating {getLanguageName(currentLanguage)} dubbing...
+                  </span>
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                </div>
+              )}
+              
+              {dubbingJob && dubbingJob.status === 'completed' && (
+                <div className="flex items-center justify-between bg-green-50 p-3 rounded-lg">
+                  <span className="text-sm text-green-900">
+                    {getLanguageName(currentLanguage)} dubbing ready
+                  </span>
+                  <Button 
+                    size="sm" 
+                    variant="ghost"
+                    onClick={() => window.open(`/api/videos/${videoId}/dubbing/${dubbingJob.id}/download`, '_blank')}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Audio
+                  </Button>
+                </div>
+              )}
             </div>
-          );
-        } else if (isTranslating) {
-          return (
-            <div className="p-4 bg-amber-50 border-b border-amber-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-amber-900">
-                  Translating to {getLanguageName(currentLanguage)}...
-                </span>
-                <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-              </div>
-            </div>
-          );
-        }
-        return null;
+          </div>
+        );
       })()}
       
       {/* Transcription/Translation Content */}

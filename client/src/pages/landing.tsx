@@ -3,7 +3,10 @@ import { useLocation } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { UploadZone } from "@/components/upload-zone";
-import { CloudUpload, MessageSquare } from "lucide-react";
+import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -11,6 +14,12 @@ export default function LandingPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Fetch existing videos
+  const { data: videos } = useQuery({
+    queryKey: ['/api/videos'],
+    refetchInterval: 5000,
+  });
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -52,14 +61,33 @@ export default function LandingPage() {
         }
       };
 
-      xhr.onload = () => {
+      xhr.onload = async () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText);
+          const videoId = response.id;
+          
           toast({
             title: "Upload successful",
-            description: "Your video has been uploaded and processing has started.",
+            description: "Starting video processing...",
           });
-          setLocation(`/workspace/${response.id}`);
+          
+          // Start processing the video
+          try {
+            const processResponse = await fetch(`/api/videos/${videoId}/process`, {
+              method: 'POST'
+            });
+            
+            if (!processResponse.ok) {
+              throw new Error('Failed to start processing');
+            }
+            
+            // Navigate to processing status page
+            setLocation(`/processing/${videoId}`);
+          } catch (error) {
+            console.error('Processing error:', error);
+            // If processing fails, still navigate to workspace
+            setLocation(`/workspace/${videoId}`);
+          }
         } else {
           throw new Error(xhr.responseText);
         }
@@ -141,6 +169,72 @@ export default function LandingPage() {
             <UploadZone onFileUpload={handleFileUpload} onBrowseClick={handleBrowseClick} />
           )}
         </div>
+        
+        {/* Existing Videos */}
+        {videos && videos.length > 0 && (
+          <div className="mt-12">
+            <h3 className="text-xl font-bold text-slate-900 mb-6">Recent Videos</h3>
+            <div className="space-y-3">
+              {videos.slice(0, 5).map((video: any) => (
+                <Card 
+                  key={video.id} 
+                  className="cursor-pointer hover:border-primary transition-colors"
+                  onClick={() => {
+                    if (video.status === 'completed') {
+                      setLocation(`/processing/${video.id}`);
+                    } else if (video.status === 'processing') {
+                      setLocation(`/processing/${video.id}`);
+                    } else {
+                      toast({
+                        title: "Video not ready",
+                        description: "This video is still being uploaded or has failed.",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileVideo className="w-5 h-5 text-slate-500" />
+                        <div>
+                          <p className="font-medium text-slate-900">
+                            {video.originalName || video.filename}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            Video ID: {video.id}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {video.status === 'completed' && (
+                          <>
+                            <Badge variant="default" className="gap-1">
+                              <CheckCircle className="w-3 h-3" />
+                              Completed
+                            </Badge>
+                          </>
+                        )}
+                        {video.status === 'processing' && (
+                          <Badge variant="secondary" className="gap-1">
+                            <Clock className="w-3 h-3" />
+                            Processing
+                          </Badge>
+                        )}
+                        {video.status === 'failed' && (
+                          <Badge variant="destructive" className="gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Failed
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

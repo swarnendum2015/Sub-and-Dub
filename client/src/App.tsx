@@ -6,11 +6,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
 import WorkspacePage from "@/pages/workspace";
+import ProcessingStatusPage from "@/pages/processing-status";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
+      <Route path="/processing/:videoId" component={ProcessingStatusPage} />
       <Route path="/workspace/:videoId" component={WorkspacePage} />
       <Route component={NotFound} />
     </Switch>

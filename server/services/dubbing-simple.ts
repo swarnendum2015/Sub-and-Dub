@@ -43,8 +43,8 @@ export async function generateDubbingSimple(dubbingJobId: number) {
       throw new Error(`No translations found for language: ${dubbingJob.language}`);
     }
 
-    // Create dubbing using simplified TTS approach
-    const dubbingResult = await createSimpleDubbing(translations, dubbingJob.language);
+    // Create dubbing using simplified TTS approach with selected voice
+    const dubbingResult = await createSimpleDubbing(translations, dubbingJob.language, voiceId);
     
     // Save audio file
     const audioPath = path.join("uploads", `dubbed_${dubbingJob.id}_${dubbingJob.language}.mp3`);
@@ -79,7 +79,7 @@ async function createSimpleDubbing(translations: any[], targetLanguage: string, 
     // Use ElevenLabs text-to-speech API with selected voice
     const selectedVoiceId = voiceId || "21m00Tcm4TlvDq8ikWAM"; // Default to Rachel voice
     
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`, {
       method: "POST",
       headers: {
         "xi-api-key": ELEVENLABS_API_KEY,

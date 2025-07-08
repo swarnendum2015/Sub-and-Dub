@@ -34,6 +34,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
+      // Parse selected models from request
+      let selectedModels = ['openai', 'gemini']; // Default to both
+      if (req.body.models) {
+        try {
+          selectedModels = JSON.parse(req.body.models);
+        } catch (e) {
+          console.log('Failed to parse models, using defaults');
+        }
+      }
+
       const video = await storage.createVideo({
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -42,8 +52,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "uploaded",
       });
 
-      // Start background processing
-      processVideo(video.id);
+      // Start background processing with selected models
+      processVideoWithTimeout(video.id, selectedModels).catch(console.error);
 
       res.json(video);
     } catch (error) {
@@ -78,13 +88,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/videos/:id/process", async (req, res) => {
     try {
       const videoId = parseInt(req.params.id);
+      const { models } = req.body;
       const video = await storage.getVideo(videoId);
       if (!video) {
         return res.status(404).json({ message: "Video not found" });
       }
 
-      // Start processing in the background with timeout
-      processVideoWithTimeout(videoId).catch(console.error);
+      // Start processing in the background with timeout and selected models
+      processVideoWithTimeout(videoId, models).catch(console.error);
       
       res.json({ message: "Video processing started", videoId: videoId });
     } catch (error) {
@@ -359,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 }
 
 // Background processing function with timeout
-async function processVideoWithTimeout(videoId: number) {
+async function processVideoWithTimeout(videoId: number, selectedModels?: string[]) {
   const PROCESSING_TIMEOUT = 10 * 60 * 1000; // 10 minutes
   
   const timeout = setTimeout(async () => {
@@ -368,22 +379,22 @@ async function processVideoWithTimeout(videoId: number) {
   }, PROCESSING_TIMEOUT);
   
   try {
-    await processVideo(videoId);
+    await processVideo(videoId, selectedModels);
   } finally {
     clearTimeout(timeout);
   }
 }
 
 // Background processing function
-async function processVideo(videoId: number) {
+async function processVideo(videoId: number, selectedModels?: string[]) {
   try {
     console.log(`[PROCESS] Starting video processing for ID: ${videoId}`);
     await storage.updateVideoStatus(videoId, "processing");
     
-    // Transcribe video (Bengali only)
-    console.log(`[PROCESS] Starting Bengali transcription for video ${videoId}`);
+    // Transcribe video (Bengali only) with selected models
+    console.log(`[PROCESS] Starting Bengali transcription for video ${videoId} with models:`, selectedModels);
     try {
-      const transcriptions = await transcribeVideo(videoId);
+      const transcriptions = await transcribeVideo(videoId, selectedModels);
       console.log(`[PROCESS] Bengali transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
     } catch (transcribeError) {
       console.error(`[PROCESS] Transcription error for video ${videoId}:`, transcribeError);

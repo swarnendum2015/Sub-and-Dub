@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 // ElevenLabs API for transcription
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_API_KEY || "";
 
-export async function transcribeVideo(videoId: number) {
+export async function transcribeVideo(videoId: number, selectedModels?: string[]) {
   console.log(`[TRANSCRIBE] Starting transcription for video ${videoId}`);
   const video = await storage.getVideo(videoId);
   if (!video) {
@@ -29,27 +29,32 @@ export async function transcribeVideo(videoId: number) {
   console.log(`[TRANSCRIBE] Video duration: ${duration} seconds`);
   await storage.updateVideoDuration(videoId, duration);
 
-  // Try multi-model transcription for higher confidence
+  // Use selected models or default to both
+  const modelsToUse = selectedModels && selectedModels.length > 0 ? selectedModels : ['openai', 'gemini'];
+  console.log(`[TRANSCRIBE] Using transcription models:`, modelsToUse);
+
   let transcriptionResult;
   try {
-    console.log(`[TRANSCRIBE] Starting multi-model audio transcription...`);
+    console.log(`[TRANSCRIBE] Starting audio transcription with selected models...`);
     
-    // Try OpenAI first
     let openaiResult = null;
     let geminiResult = null;
     
-    try {
-      console.log(`[TRANSCRIBE] Attempting OpenAI Whisper transcription...`);
-      openaiResult = await transcribeWithOpenAI(audioPath);
-    } catch (openaiError) {
-      console.error('[TRANSCRIBE] OpenAI transcription failed:', openaiError);
-      if (openaiError instanceof Error && openaiError.message.includes('429')) {
-        console.log('[TRANSCRIBE] OpenAI quota exceeded, falling back to Gemini...');
+    // Try OpenAI if selected
+    if (modelsToUse.includes('openai')) {
+      try {
+        console.log(`[TRANSCRIBE] Attempting OpenAI Whisper transcription...`);
+        openaiResult = await transcribeWithOpenAI(audioPath);
+      } catch (openaiError) {
+        console.error('[TRANSCRIBE] OpenAI transcription failed:', openaiError);
+        if (openaiError instanceof Error && openaiError.message.includes('429')) {
+          console.log('[TRANSCRIBE] OpenAI quota exceeded');
+        }
       }
     }
     
-    // Try Gemini as well (or as fallback)
-    if (process.env.GEMINI_API_KEY) {
+    // Try Gemini if selected
+    if (modelsToUse.includes('gemini') && process.env.GEMINI_API_KEY) {
       try {
         console.log(`[TRANSCRIBE] Attempting Gemini transcription...`);
         geminiResult = await transcribeWithGemini(audioPath);
@@ -58,23 +63,23 @@ export async function transcribeVideo(videoId: number) {
       }
     }
     
-    // Combine results or use whichever succeeded
-    if (openaiResult && geminiResult) {
+    // Combine results if both models were used and succeeded
+    if (openaiResult && geminiResult && modelsToUse.length === 2) {
       console.log(`[TRANSCRIBE] Both models succeeded, combining results...`);
       transcriptionResult = combineTranscriptionResults(openaiResult, geminiResult);
     } else if (openaiResult) {
-      console.log(`[TRANSCRIBE] Using OpenAI result only`);
+      console.log(`[TRANSCRIBE] Using OpenAI result`);
       transcriptionResult = openaiResult;
     } else if (geminiResult) {
-      console.log(`[TRANSCRIBE] Using Gemini result only`);
+      console.log(`[TRANSCRIBE] Using Gemini result`);
       transcriptionResult = geminiResult;
     } else {
-      throw new Error('Both transcription services failed. Please check your API keys and quotas.');
+      throw new Error('All selected transcription services failed. Please check your API keys and quotas.');
     }
     
     console.log(`[TRANSCRIBE] Transcription completed successfully`);
   } catch (error) {
-    console.error('[TRANSCRIBE] Multi-model transcription failed:', error);
+    console.error('[TRANSCRIBE] Transcription failed:', error);
     throw error;
   }
   

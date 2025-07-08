@@ -3,15 +3,18 @@ import { useLocation } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { UploadZone } from "@/components/upload-zone";
-import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedModels, setSelectedModels] = useState<string[]>(['openai', 'gemini']);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -20,9 +23,24 @@ export default function LandingPage() {
     queryKey: ['/api/videos'],
     refetchInterval: 5000,
   });
+  
+  // Sort videos by most recent
+  const sortedVideos = videos ? [...videos].sort((a: any, b: any) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  ) : [];
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
+
+    // Validate that at least one model is selected
+    if (selectedModels.length === 0) {
+      toast({
+        title: "No model selected",
+        description: "Please select at least one transcription model",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Validate file type
     const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
@@ -51,6 +69,7 @@ export default function LandingPage() {
     try {
       const formData = new FormData();
       formData.append('video', file);
+      formData.append('models', JSON.stringify(selectedModels));
 
       const xhr = new XMLHttpRequest();
       
@@ -71,10 +90,14 @@ export default function LandingPage() {
             description: "Starting video processing...",
           });
           
-          // Start processing the video
+          // Start processing the video with selected models
           try {
             const processResponse = await fetch(`/api/videos/${videoId}/process`, {
-              method: 'POST'
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ models: selectedModels })
             });
             
             if (!processResponse.ok) {
@@ -170,12 +193,56 @@ export default function LandingPage() {
           )}
         </div>
         
+        {/* Model Selection */}
+        {!isUploading && (
+          <div className="mt-8 p-4 bg-slate-50 rounded-lg">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Select Transcription Models</h3>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="openai" 
+                  checked={selectedModels.includes('openai')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedModels([...selectedModels, 'openai']);
+                    } else {
+                      setSelectedModels(selectedModels.filter(m => m !== 'openai'));
+                    }
+                  }}
+                />
+                <Label htmlFor="openai" className="text-sm font-normal cursor-pointer">
+                  OpenAI Whisper
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="gemini" 
+                  checked={selectedModels.includes('gemini')}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedModels([...selectedModels, 'gemini']);
+                    } else {
+                      setSelectedModels(selectedModels.filter(m => m !== 'gemini'));
+                    }
+                  }}
+                />
+                <Label htmlFor="gemini" className="text-sm font-normal cursor-pointer">
+                  Gemini 2.5 Pro
+                </Label>
+              </div>
+            </div>
+            {selectedModels.length === 0 && (
+              <p className="text-sm text-red-600 mt-2">Please select at least one model</p>
+            )}
+          </div>
+        )}
+        
         {/* Existing Videos */}
-        {videos && videos.length > 0 && (
+        {sortedVideos.length > 0 && (
           <div className="mt-12">
             <h3 className="text-xl font-bold text-slate-900 mb-6">Recent Videos</h3>
             <div className="space-y-3">
-              {videos.slice(0, 5).map((video: any) => (
+              {sortedVideos.slice(0, 5).map((video: any) => (
                 <Card 
                   key={video.id} 
                   className="cursor-pointer hover:border-primary transition-colors"
@@ -211,9 +278,21 @@ export default function LandingPage() {
                           <p className="font-medium text-slate-900">
                             {video.originalName || video.filename}
                           </p>
-                          <p className="text-sm text-slate-500">
-                            Video ID: {video.id}
-                          </p>
+                          <div className="flex items-center gap-3 text-sm text-slate-500">
+                            <span>Video ID: {video.id}</span>
+                            {video.createdAt && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(video.createdAt).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

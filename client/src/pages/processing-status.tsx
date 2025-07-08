@@ -72,11 +72,12 @@ export default function ProcessingStatusPage() {
         status: 'processing',
         message: 'Extracting and transcribing audio...'
       });
+      // Translation is now manual, not automatic
       steps.push({
-        id: 'translation',
-        name: 'Translating to Multiple Languages',
+        id: 'review',
+        name: 'Ready for Review',
         status: 'pending',
-        message: 'Will translate to English, Hindi, Tamil, Telugu, Malayalam'
+        message: 'Review and confirm Bengali transcription before translation'
       });
     } else if (video?.status === 'completed') {
       steps.push({
@@ -86,21 +87,13 @@ export default function ProcessingStatusPage() {
         message: `Found ${transcriptions?.length || 0} segments`
       });
       
-      if (transcriptions && transcriptions.length > 0) {
-        steps.push({
-          id: 'translation',
-          name: 'Translating to Multiple Languages',
-          status: 'completed',
-          message: 'Translations completed for all languages'
-        });
-      } else {
-        steps.push({
-          id: 'translation',
-          name: 'Translating to Multiple Languages',
-          status: 'processing',
-          message: 'Processing translations...'
-        });
-      }
+      // Translation is manual, not automatic
+      steps.push({
+        id: 'review',
+        name: 'Ready for Review',
+        status: 'completed',
+        message: 'Bengali transcription ready for review and manual translation'
+      });
     } else if (video?.status === 'failed') {
       steps.push({
         id: 'transcription',

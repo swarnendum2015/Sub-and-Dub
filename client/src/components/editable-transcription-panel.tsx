@@ -20,10 +20,11 @@ import {
   X,
   Mic,
   Play,
-  Languages
+  Languages,
+  Volume2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Transcription, Translation } from "@shared/schema";
+import type { Transcription, Translation, DubbingJob } from "@shared/schema";
 
 interface EditableTranscriptionPanelProps {
   videoId: string;
@@ -42,6 +43,7 @@ export function EditableTranscriptionPanel({
   const [dubbingLanguages, setDubbingLanguages] = useState<Set<string>>(new Set());
   const [speakerCount, setSpeakerCount] = useState(1);
   const [selectedVoiceIds, setSelectedVoiceIds] = useState<string[]>(["21m00Tcm4TlvDq8ikWAM"]);
+  const [selectedDubbingLanguage, setSelectedDubbingLanguage] = useState<string>('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -203,6 +205,22 @@ export function EditableTranscriptionPanel({
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'transcriptions'] });
       setEditingId(null);
       toast({ title: "Translation updated successfully" });
+    },
+  });
+
+  const dubbingMutation = useMutation({
+    mutationFn: async ({ language, voiceIds, dubbingType }: { language: string, voiceIds: string[], dubbingType: string }) => {
+      const response = await fetch(`/api/videos/${videoId}/dubbing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language, voiceIds, dubbingType }),
+      });
+      if (!response.ok) throw new Error('Failed to start dubbing');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'dubbing-jobs'] });
+      toast({ title: "Dubbing started successfully" });
     },
   });
 
@@ -393,11 +411,145 @@ export function EditableTranscriptionPanel({
                     );
                   } else {
                     return (
-                      <div className="flex items-center space-x-2 p-3 bg-green-50 rounded-lg">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="text-sm text-green-800">
-                          Bengali transcription confirmed and ready for translation
-                        </span>
+                      <div className="space-y-4">
+                        {/* Confirmed Bengali transcription segments */}
+                        <div className="space-y-3">
+                          {transcriptions.map((transcription: Transcription) => (
+                            <div key={transcription.id} className="p-3 border rounded-lg bg-white">
+                              <div className="text-xs text-gray-500 mb-1">
+                                {Math.floor(transcription.startTime / 60)}:{(transcription.startTime % 60).toFixed(1).padStart(4, '0')} - {Math.floor(transcription.endTime / 60)}:{(transcription.endTime % 60).toFixed(1).padStart(4, '0')}
+                              </div>
+                              <p className="text-sm">{transcription.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Translation and Dubbing Options */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Translation Section */}
+                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div className="flex items-center mb-3">
+                              <Languages className="w-5 h-5 text-green-600 mr-2" />
+                              <span className="font-medium text-green-800">Translation Options</span>
+                            </div>
+                            <p className="text-sm text-green-700 mb-3">
+                              Select languages to translate your Bengali content:
+                            </p>
+                            <div className="space-y-2 mb-3">
+                              {[
+                                { code: 'en', label: 'English' },
+                                { code: 'hi', label: 'Hindi' },
+                                { code: 'ta', label: 'Tamil' },
+                                { code: 'te', label: 'Telugu' },
+                                { code: 'ml', label: 'Malayalam' }
+                              ].map(lang => {
+                                const status = getTranslationStatus(lang.code);
+                                return (
+                                  <div key={lang.code} className="flex items-center justify-between p-2 bg-white rounded border">
+                                    <span className="text-sm font-medium">{lang.label}</span>
+                                    {status === 'completed' ? (
+                                      <Badge className="bg-green-100 text-green-700">
+                                        <CheckCircle className="w-3 h-3 mr-1" />
+                                        Done
+                                      </Badge>
+                                    ) : (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => translateMutation.mutate(lang.code)}
+                                        disabled={translateMutation.isPending}
+                                        className="h-7 px-2"
+                                      >
+                                        {translateMutation.isPending ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          'Translate'
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Dubbing Section */}
+                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <div className="flex items-center mb-3">
+                              <Volume2 className="w-5 h-5 text-purple-600 mr-2" />
+                              <span className="font-medium text-purple-800">Audio Dubbing</span>
+                            </div>
+                            <p className="text-sm text-purple-700 mb-3">
+                              Generate AI dubbing in one language:
+                            </p>
+                            
+                            {dubbingJobs.length > 0 ? (
+                              <div className="space-y-2">
+                                {dubbingJobs.map((job: DubbingJob) => (
+                                  <div key={job.id} className="p-2 bg-white rounded border">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium">
+                                        {job.language.toUpperCase()} Dubbing
+                                      </span>
+                                      <Badge 
+                                        className={
+                                          job.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                          job.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                          'bg-blue-100 text-blue-700'
+                                        }
+                                      >
+                                        {job.status === 'pending' && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                                        {job.status}
+                                      </Badge>
+                                    </div>
+                                    {job.audioPath && (
+                                      <audio controls className="w-full mt-2">
+                                        <source src={job.audioPath} type="audio/mpeg" />
+                                      </audio>
+                                    )}
+                                  </div>
+                                ))}
+                                <p className="text-xs text-purple-600 mt-2">
+                                  Dubbing session active. New dubbing will be available after current jobs complete.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <Select value={selectedDubbingLanguage} onValueChange={setSelectedDubbingLanguage}>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select dubbing language" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="en">English</SelectItem>
+                                    <SelectItem value="hi">Hindi</SelectItem>
+                                    <SelectItem value="ta">Tamil</SelectItem>
+                                    <SelectItem value="te">Telugu</SelectItem>
+                                    <SelectItem value="ml">Malayalam</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                
+                                <Button 
+                                  onClick={() => {
+                                    if (selectedDubbingLanguage) {
+                                      dubbingMutation.mutate({
+                                        language: selectedDubbingLanguage,
+                                        voiceIds: ['21m00Tcm4TlvDq8ikWAM'],
+                                        dubbingType: 'studio'
+                                      });
+                                    }
+                                  }}
+                                  disabled={!selectedDubbingLanguage || dubbingMutation.isPending}
+                                  className="w-full bg-purple-600 hover:bg-purple-700"
+                                >
+                                  {dubbingMutation.isPending && (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  )}
+                                  Generate Audio Dubbing
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   }
@@ -803,6 +955,62 @@ export function EditableTranscriptionPanel({
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+// Simple editable transcription segment component
+function EditableTranscriptionSegment({ 
+  transcription, 
+  isEditing, 
+  onEdit, 
+  onSave, 
+  onCancel 
+}: {
+  transcription: Transcription;
+  isEditing: boolean;
+  onEdit: () => void;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [editText, setEditText] = useState(transcription.text);
+
+  if (isEditing) {
+    return (
+      <div className="p-3 border rounded-lg bg-blue-50">
+        <Textarea
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          className="w-full mb-2"
+          rows={3}
+        />
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => onSave(editText)}>
+            <Check className="w-4 h-4 mr-1" />
+            Save
+          </Button>
+          <Button size="sm" variant="outline" onClick={onCancel}>
+            <X className="w-4 h-4 mr-1" />
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3 border rounded-lg bg-white hover:bg-gray-50">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="text-xs text-gray-500 mb-1">
+            {Math.floor(transcription.startTime / 60)}:{(transcription.startTime % 60).toFixed(1).padStart(4, '0')} - {Math.floor(transcription.endTime / 60)}:{(transcription.endTime % 60).toFixed(1).padStart(4, '0')}
+          </div>
+          <p className="text-sm">{transcription.text}</p>
+        </div>
+        <Button size="sm" variant="ghost" onClick={onEdit}>
+          <Edit className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );

@@ -145,6 +145,16 @@ Changelog:
   - Enhanced error handling and fallback mechanisms for translation failures
   - Updated model selection UI to include ElevenLabs STT option
   - Improved translation workflow with proper state management and user feedback
+
+- July 08, 2025. Enhanced UI/UX with Multi-Model Selection and Navigation
+  - Added dropdown selections for multiple transcription models in Bengali screen
+  - Added dropdown selections for translation model sources in translation tabs
+  - Implemented working navigation menu with proper sheet-based sidebar
+  - Enhanced model selection UI with card-based layout and descriptive text
+  - Added comprehensive error handling for all edge cases and API failures
+  - Improved responsive design with better loading states and error messages
+  - Added validation feedback for model selection and file upload
+  - Polished overall UI to look like a finished production application
 ```
 
 ## User Preferences

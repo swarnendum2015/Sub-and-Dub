@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPlayer } from "@/components/video-player";
 import { EditableTranscriptionPanel } from "@/components/editable-transcription-panel";
 import ErrorBoundary from "@/components/error-boundary";
@@ -19,7 +20,8 @@ import {
   Settings,
   Palette,
   CheckCircle,
-  Video
+  Video,
+  Home
 } from "lucide-react";
 
 function WorkspaceContent() {
@@ -170,127 +172,147 @@ function WorkspaceContent() {
               )}
               <span>{processingStatus.status}</span>
             </Badge>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSideMenuOpen(!sideMenuOpen)}
-            >
-              <Menu className="w-4 h-4" />
-            </Button>
+            
+            {/* Navigation Menu */}
+            <Sheet open={sideMenuOpen} onOpenChange={setSideMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Menu className="w-4 h-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-80">
+                <SheetHeader>
+                  <SheetTitle className="flex items-center space-x-2">
+                    <MessageSquare className="w-5 h-5" />
+                    <span>SubtitlePro</span>
+                  </SheetTitle>
+                </SheetHeader>
+                
+                <div className="mt-6 space-y-6">
+                  {/* Navigation Links */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-slate-900">Navigation</h3>
+                    <div className="space-y-2">
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => window.location.href = "/"}
+                      >
+                        <Home className="w-4 h-4 mr-2" />
+                        Home
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        className="w-full justify-start"
+                        onClick={() => window.location.href = `/workspace/${videoId}`}
+                      >
+                        <Video className="w-4 h-4 mr-2" />
+                        Current Workspace
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Video Actions */}
+                  {video && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Video Actions</h3>
+                      <div className="space-y-2">
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-start"
+                          onClick={() => window.open(`/api/videos/${videoId}/srt/download?lang=bn`, '_blank')}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Bengali SRT
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          className="w-full justify-start"
+                          onClick={() => window.open(`/api/videos/${videoId}/srt/download?lang=en`, '_blank')}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download English SRT
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Video Stats */}
+                  {video && (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Video Information</h3>
+                      <div className="space-y-2 text-sm text-slate-600">
+                        <div className="flex justify-between">
+                          <span>File Size:</span>
+                          <span>{(video.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+                        </div>
+                        {video.duration && (
+                          <div className="flex justify-between">
+                            <span>Duration:</span>
+                            <span>{Math.floor(video.duration / 60)}:{String(Math.floor(video.duration % 60)).padStart(2, '0')}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span>Status:</span>
+                          <span className="capitalize">{video.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
 
       {/* Main Workspace */}
-      <div className="flex h-[calc(100vh-48px)]">
-        {/* Collapsible Side Menu */}
-        {sideMenuOpen && (
-          <div className="w-64 bg-white border-r border-slate-200 p-4 space-y-6">
-            {/* Export Options */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Export Options</h3>
-              <div className="space-y-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  size="sm"
-                  disabled={!video || video.status !== 'completed' || (transcriptions?.length || 0) === 0}
-                  onClick={() => {
-                    const language = currentLanguage === 'bn' ? '' : `?language=${currentLanguage}`;
-                    window.open(`/api/videos/${videoId}/srt${language}`, '_blank');
-                  }}
-                >
-                  <Download className="w-4 h-4 mr-3" />
-                  Download SRT Files
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <FileAudio className="w-4 h-4 mr-3" />
-                  Export Dubbed Audio
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <FileVideo className="w-4 h-4 mr-3" />
-                  Export Final Video
-                </Button>
-              </div>
+      <div className="flex h-[calc(100vh-60px)]">
+        {/* Video and Transcription Panels */}
+        <div className="flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-2 h-full">
+            {/* Video Player */}
+            <div className="bg-black relative">
+              <ErrorBoundary>
+                <VideoPlayer 
+                  videoId={videoId!} 
+                  currentTime={currentTime}
+                  onTimeUpdate={setCurrentTime}
+                />
+              </ErrorBoundary>
+              
+              {/* Video Loading Overlay */}
+              {videoLoading && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                  <div className="text-white text-center">
+                    <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm">Loading video...</p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Settings */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Settings</h3>
-              <div className="space-y-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <Settings className="w-4 h-4 mr-3" />
-                  AI Model Settings
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <Palette className="w-4 h-4 mr-3" />
-                  Subtitle Styling
-                </Button>
-              </div>
-            </div>
-
-            {/* Processing History */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900 mb-3">Processing History</h3>
-              <div className="space-y-3">
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-green-900">Bengali Transcription</span>
-                    <CheckCircle className="w-4 h-4 text-green-600" />
+            {/* Transcription Panel */}
+            <div className="bg-white border-l border-slate-200 overflow-hidden relative">
+              <ErrorBoundary>
+                <EditableTranscriptionPanel
+                  videoId={videoId!}
+                  currentTime={currentTime}
+                  onTimeSeek={setCurrentTime}
+                />
+              </ErrorBoundary>
+              
+              {/* Transcription Loading Overlay */}
+              {transcriptionsLoading && (
+                <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm text-slate-600">Loading transcriptions...</p>
                   </div>
-                  <div className="text-xs text-green-700">Confidence: 94%</div>
                 </div>
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-green-900">English Translation</span>
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div className="text-xs text-green-700">Confidence: 91%</div>
-                </div>
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-green-900">Hindi Translation</span>
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div className="text-xs text-green-700">Confidence: 89%</div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
-        )}
-
-        {/* Video Player Section */}
-        <div className="w-1/2 bg-black">
-          <VideoPlayer
-            videoId={videoId!}
-            currentTime={currentTime}
-            onTimeUpdate={setCurrentTime}
-          />
-        </div>
-
-        {/* Bengali and English Translation Panel */}
-        <div className="w-1/2 bg-white border-l border-slate-200 flex flex-col">
-          <EditableTranscriptionPanel
-            videoId={videoId!}
-            currentTime={currentTime}
-            onTimeSeek={setCurrentTime}
-          />
         </div>
       </div>
     </div>

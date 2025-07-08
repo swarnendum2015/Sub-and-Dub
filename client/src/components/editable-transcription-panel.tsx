@@ -41,9 +41,11 @@ export function EditableTranscriptionPanel({
   const [translatingLanguages, setTranslatingLanguages] = useState<Set<string>>(new Set());
   const [dubbingLanguages, setDubbingLanguages] = useState<Set<string>>(new Set());
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("21m00Tcm4TlvDq8ikWAM"); // Default Rachel voice
+  const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>("combined"); // For Bengali model selection
+  const [selectedTranslationModel, setSelectedTranslationModel] = useState<string>("best"); // For translation model selection
   
-  // Fetch transcriptions
-  const { data: transcriptions = [], isLoading: transcriptionsLoading } = useQuery({
+  // Fetch transcriptions with proper error handling
+  const { data: transcriptions = [], isLoading: transcriptionsLoading, error: transcriptionsError } = useQuery({
     queryKey: [`/api/videos/${videoId}/transcriptions`],
     refetchInterval: bengaliConfirmed ? false : 5000,
   });
@@ -373,25 +375,43 @@ export function EditableTranscriptionPanel({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <div className="flex items-center justify-between">
-                <span>Review and edit Bengali transcription before proceeding to translations</span>
-                <Button 
-                  size="sm" 
-                  onClick={() => confirmBengaliMutation.mutate()}
-                  disabled={confirmBengaliMutation.isPending}
-                >
-                  {confirmBengaliMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Confirming...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Confirm Bengali
-                    </>
-                  )}
-                </Button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span>Review and edit Bengali transcription before proceeding to translations</span>
+                  <Button 
+                    size="sm" 
+                    onClick={() => confirmBengaliMutation.mutate()}
+                    disabled={confirmBengaliMutation.isPending}
+                  >
+                    {confirmBengaliMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Confirm Bengali
+                      </>
+                    )}
+                  </Button>
+                </div>
+                
+                {/* Transcription Model Selection for Bengali */}
+                <div className="flex items-center space-x-3">
+                  <label className="text-sm font-medium text-amber-800">View transcription from:</label>
+                  <Select value={selectedTranscriptionModel} onValueChange={setSelectedTranscriptionModel}>
+                    <SelectTrigger className="w-[200px] bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="combined">Best Combined Result</SelectItem>
+                      <SelectItem value="openai">OpenAI Whisper Only</SelectItem>
+                      <SelectItem value="gemini">Gemini 2.5 Pro Only</SelectItem>
+                      <SelectItem value="elevenlabs">ElevenLabs STT Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </AlertDescription>
           </Alert>
@@ -415,19 +435,39 @@ export function EditableTranscriptionPanel({
             <div className="space-y-3">
               {/* Translation Status */}
               {!hasTranslations && !isTranslating && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">
-                    No {getLanguageName(currentLanguage)} translation available
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
-                    disabled={triggerTranslationMutation.isPending}
-                  >
-                    <Languages className="w-4 h-4 mr-2" />
-                    Translate to {getLanguageName(currentLanguage)}
-                  </Button>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-700">
+                      No {getLanguageName(currentLanguage)} translation available
+                    </span>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
+                      disabled={triggerTranslationMutation.isPending}
+                    >
+                      <Languages className="w-4 h-4 mr-2" />
+                      Translate to {getLanguageName(currentLanguage)}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Translation Model Selection for non-Bengali languages */}
+              {hasTranslations && (
+                <div className="flex items-center space-x-3">
+                  <label className="text-sm font-medium text-slate-700">Translation source:</label>
+                  <Select value={selectedTranslationModel} onValueChange={setSelectedTranslationModel}>
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="best">Best Available</SelectItem>
+                      <SelectItem value="gemini">Gemini 2.5 Pro</SelectItem>
+                      <SelectItem value="openai">OpenAI GPT-4</SelectItem>
+                      <SelectItem value="demo">Demo/Fallback</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
               

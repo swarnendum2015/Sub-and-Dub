@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { UploadZone } from "@/components/upload-zone";
-import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar } from "lucide-react";
+import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar, Settings, Palette, Download, FileAudio } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -195,10 +195,13 @@ export default function LandingPage() {
         
         {/* Model Selection */}
         {!isUploading && (
-          <div className="mt-8 p-4 bg-slate-50 rounded-lg">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Select Transcription Models</h3>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
+          <div className="mt-8 p-6 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+            <h3 className="text-base font-semibold text-slate-900 mb-4 flex items-center">
+              <Settings className="w-4 h-4 mr-2" />
+              Select Transcription Models
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
                 <Checkbox 
                   id="openai" 
                   checked={selectedModels.includes('openai')}
@@ -210,11 +213,12 @@ export default function LandingPage() {
                     }
                   }}
                 />
-                <Label htmlFor="openai" className="text-sm font-normal cursor-pointer">
+                <Label htmlFor="openai" className="text-sm font-medium cursor-pointer flex-1">
                   OpenAI Whisper
+                  <div className="text-xs text-slate-500 mt-1">Industry standard</div>
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
                 <Checkbox 
                   id="gemini" 
                   checked={selectedModels.includes('gemini')}
@@ -226,11 +230,12 @@ export default function LandingPage() {
                     }
                   }}
                 />
-                <Label htmlFor="gemini" className="text-sm font-normal cursor-pointer">
+                <Label htmlFor="gemini" className="text-sm font-medium cursor-pointer flex-1">
                   Gemini 2.5 Pro
+                  <div className="text-xs text-slate-500 mt-1">Google's latest</div>
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
                 <Checkbox 
                   id="elevenlabs" 
                   checked={selectedModels.includes('elevenlabs')}
@@ -242,8 +247,9 @@ export default function LandingPage() {
                     }
                   }}
                 />
-                <Label htmlFor="elevenlabs" className="text-sm font-normal cursor-pointer">
+                <Label htmlFor="elevenlabs" className="text-sm font-medium cursor-pointer flex-1">
                   ElevenLabs STT
+                  <div className="text-xs text-slate-500 mt-1">Voice specialist</div>
                 </Label>
               </div>
             </div>
@@ -338,6 +344,24 @@ export default function LandingPage() {
                 </Card>
               ))}
             </div>
+            
+            {/* Model Selection Feedback */}
+            {selectedModels.length === 0 && (
+              <div className="flex items-center space-x-2 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                <span className="text-sm text-amber-800 font-medium">Please select at least one transcription model</span>
+              </div>
+            )}
+            
+            {selectedModels.length > 0 && (
+              <div className="flex items-center space-x-2 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <CheckCircle className="w-4 h-4 text-blue-600" />
+                <span className="text-sm text-blue-800 font-medium">
+                  {selectedModels.length} model{selectedModels.length > 1 ? 's' : ''} selected
+                  {selectedModels.length > 1 && " - You'll be able to compare results in the workspace"}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </main>

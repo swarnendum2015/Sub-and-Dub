@@ -47,22 +47,50 @@ export function EditableTranscriptionPanel({
 
   // Data fetching queries
   const { data: transcriptions = [], isLoading: transcriptionsLoading } = useQuery({
-    queryKey: ['/api/transcriptions', videoId],
+    queryKey: ['/api/videos', videoId, 'transcriptions'],
+    queryFn: async () => {
+      const response = await fetch(`/api/videos/${videoId}/transcriptions`);
+      if (!response.ok) throw new Error('Failed to fetch transcriptions');
+      return response.json();
+    },
     enabled: !!videoId,
   });
 
-  const { data: translations = [] } = useQuery({
+  const { data: allTranslations = [] } = useQuery({
     queryKey: ['/api/translations', videoId],
-    enabled: !!videoId,
+    queryFn: async () => {
+      if (!transcriptions.length) return [];
+      
+      const translationPromises = transcriptions.map(async (transcription: Transcription) => {
+        const response = await fetch(`/api/transcriptions/${transcription.id}/translations`);
+        if (!response.ok) return [];
+        const translationsData = await response.json();
+        return translationsData.map((t: Translation) => ({ ...t, transcriptionId: transcription.id }));
+      });
+      
+      const allTranslations = await Promise.all(translationPromises);
+      return allTranslations.flat();
+    },
+    enabled: !!videoId && transcriptions.length > 0,
   });
 
   const { data: dubbingJobs = [] } = useQuery({
-    queryKey: ['/api/dubbing-jobs', videoId],
+    queryKey: ['/api/videos', videoId, 'dubbing-jobs'],
+    queryFn: async () => {
+      const response = await fetch(`/api/videos/${videoId}/dubbing-jobs`);
+      if (!response.ok) throw new Error('Failed to fetch dubbing jobs');
+      return response.json();
+    },
     enabled: !!videoId,
   });
 
   const { data: video } = useQuery({
     queryKey: ['/api/videos', videoId],
+    queryFn: async () => {
+      const response = await fetch(`/api/videos/${videoId}`);
+      if (!response.ok) throw new Error('Failed to fetch video');
+      return response.json();
+    },
     enabled: !!videoId,
   });
 
@@ -98,7 +126,7 @@ export function EditableTranscriptionPanel({
   };
 
   const getTranslationsForLanguage = (transcriptionId: number) => {
-    const translation = translations.find((t: Translation) => 
+    const translation = allTranslations.find((t: Translation) => 
       t.transcriptionId === transcriptionId && t.targetLanguage === currentLanguage
     );
     return translation;
@@ -139,6 +167,7 @@ export function EditableTranscriptionPanel({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'transcriptions'] });
       setEditingId(null);
       toast({ title: "Translation updated successfully" });
     },
@@ -230,13 +259,13 @@ export function EditableTranscriptionPanel({
     if (language === 'bn') return 'original';
     
     const hasAllTranslations = transcriptions.every((t: Transcription) => {
-      return translations.some((trans: Translation) => 
+      return allTranslations.some((trans: Translation) => 
         trans.transcriptionId === t.id && trans.targetLanguage === language
       );
     });
     
     const hasTranslations = transcriptions.some((t: Transcription) => {
-      return translations.some((trans: Translation) => 
+      return allTranslations.some((trans: Translation) => 
         trans.transcriptionId === t.id && trans.targetLanguage === language
       );
     });

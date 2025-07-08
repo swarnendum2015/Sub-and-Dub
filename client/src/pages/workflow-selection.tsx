@@ -48,7 +48,8 @@ export function WorkflowSelectionPage() {
       });
       
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const errorData = await response.text();
+        throw new Error(`Transcription failed: ${errorData}`);
       }
       
       return response.json();
@@ -78,15 +79,15 @@ export function WorkflowSelectionPage() {
       const transcribeResponse = await fetch(`/api/videos/${videoId}/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedModels: ['openai', 'gemini'] })
+        body: JSON.stringify({ selectedModels: ['gemini'] })
       });
       
       if (!transcribeResponse.ok) {
         throw new Error('Bengali transcription failed');
       }
 
-      // Wait for transcription to complete (simplified for demo)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a moment for transcription to start
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Generate translations for selected languages
       for (const language of languages) {
@@ -128,15 +129,15 @@ export function WorkflowSelectionPage() {
       const transcribeResponse = await fetch(`/api/videos/${videoId}/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedModels: ['openai', 'gemini'] })
+        body: JSON.stringify({ selectedModels: ['gemini'] })
       });
       
       if (!transcribeResponse.ok) {
         throw new Error('Bengali transcription failed');
       }
 
-      // Wait for transcription to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a moment for transcription to start
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Generate translation
       const translateResponse = await fetch(`/api/videos/${videoId}/translate`, {
@@ -203,7 +204,7 @@ export function WorkflowSelectionPage() {
 
     switch (selectedWorkflow) {
       case 'transcription':
-        bengaliTranscriptionMutation.mutate(['openai', 'gemini']);
+        bengaliTranscriptionMutation.mutate(['gemini']); // Use Gemini as OpenAI quota exceeded
         break;
       case 'subtitles':
         if (selectedLanguages.length === 0) {

@@ -1,7 +1,4 @@
 import { storage } from "../storage";
-import { GoogleGenerativeAI } from "@google/genai";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 // Fallback if Google GenAI is not available, use OpenAI
 async function translateBatchWithOpenAI(batchText: string, targetLanguage: string): Promise<string> {
@@ -80,8 +77,14 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
     
     console.log(`[BATCH_TRANSLATE] Prepared batch text with ${Object.keys(segmentMap).length} segments`);
     
-    // Translate the entire batch using Gemini
-    const translatedBatch = await translateBatchWithGemini(batchText, targetLanguage);
+    // Translate the entire batch using Gemini with OpenAI fallback
+    let translatedBatch;
+    try {
+      translatedBatch = await translateBatchWithGemini(batchText, targetLanguage);
+    } catch (error) {
+      console.error('[BATCH_TRANSLATE] Gemini failed, using OpenAI fallback:', error);
+      translatedBatch = await translateBatchWithOpenAI(batchText, targetLanguage);
+    }
     
     // Parse the translated batch back into individual segments
     const translatedSegments = parseBatchTranslation(translatedBatch, segmentMap);
@@ -123,8 +126,10 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
 }
 
 async function translateBatchWithGemini(batchText: string, targetLanguage: string): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-  
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("Gemini API key not configured");
+  }
+
   const languageMap: { [key: string]: string } = {
     'en': 'English',
     'hi': 'Hindi',
@@ -151,12 +156,39 @@ ${batchText}
 
 Translate to ${targetLangName}:`;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const translatedText = response.text();
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.3,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 8192,
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Gemini API error:', response.status, errorText);
+    // Fallback to OpenAI if Gemini fails
+    return await translateBatchWithOpenAI(batchText, targetLanguage);
+  }
+
+  const data = await response.json();
+  const translatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
   
   if (!translatedText) {
-    throw new Error("No translation received from Gemini");
+    console.error('No translation received from Gemini, falling back to OpenAI');
+    return await translateBatchWithOpenAI(batchText, targetLanguage);
   }
   
   return translatedText;

@@ -36,6 +36,7 @@ export interface IStorage {
   // Dubbing operations
   createDubbingJob(dubbingJob: InsertDubbingJob): Promise<DubbingJob>;
   getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]>;
+  getDubbingJob(id: number): Promise<DubbingJob | undefined>;
   updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void>;
 }
 
@@ -107,6 +108,11 @@ export class DatabaseStorage implements IStorage {
 
   async getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]> {
     return await db.select().from(dubbingJobs).where(eq(dubbingJobs.videoId, videoId));
+  }
+  
+  async getDubbingJob(id: number): Promise<DubbingJob | undefined> {
+    const [job] = await db.select().from(dubbingJobs).where(eq(dubbingJobs.id, id));
+    return job || undefined;
   }
 
   async updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void> {
@@ -228,6 +234,10 @@ export class MemStorage implements IStorage {
 
   async getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]> {
     return Array.from(this.dubbingJobs.values()).filter(d => d.videoId === videoId);
+  }
+  
+  async getDubbingJob(id: number): Promise<DubbingJob | undefined> {
+    return this.dubbingJobs.get(id);
   }
 
   async updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void> {

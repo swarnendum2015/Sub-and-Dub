@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import { insertVideoSchema } from "@shared/schema";
 import { transcribeVideo } from "./services/transcription";
 import { translateText } from "./services/translation";
-import { generateDubbing } from "./services/dubbing";
+import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
 
 const upload = multer({
@@ -200,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Start background dubbing process
-      generateDubbing(dubbingJob.id);
+      generateDubbingSimple(dubbingJob.id);
 
       res.json(dubbingJob);
     } catch (error) {

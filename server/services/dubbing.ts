@@ -5,8 +5,7 @@ import path from "path";
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_API_KEY || "";
 
 export async function generateDubbing(dubbingJobId: number) {
-  const dubbingJobs = await storage.getDubbingJobsByVideoId(dubbingJobId);
-  const dubbingJob = dubbingJobs.find(job => job.id === dubbingJobId);
+  const dubbingJob = await storage.getDubbingJob(dubbingJobId);
   
   if (!dubbingJob) {
     throw new Error("Dubbing job not found");

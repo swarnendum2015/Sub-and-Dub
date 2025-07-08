@@ -140,6 +140,70 @@ export default function LandingPage() {
     }
   };
 
+  const handleS3Upload = async (s3Url: string) => {
+    if (selectedModels.length === 0) {
+      toast({
+        title: "No model selected",
+        description: "Please select at least one transcription model",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/videos/upload-s3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ s3Url, selectedModels }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to process S3 video');
+      
+      const data = await response.json();
+      if (data.videoId) {
+        setLocation(`/processing/${data.videoId}`);
+      }
+    } catch (error) {
+      toast({
+        title: "S3 Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to process S3 video",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleYouTubeUpload = async (youtubeUrl: string) => {
+    if (selectedModels.length === 0) {
+      toast({
+        title: "No model selected",
+        description: "Please select at least one transcription model",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/videos/upload-youtube', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ youtubeUrl, selectedModels }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to process YouTube video');
+      
+      const data = await response.json();
+      if (data.videoId) {
+        setLocation(`/processing/${data.videoId}`);
+      }
+    } catch (error) {
+      toast({
+        title: "YouTube Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to process YouTube video",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleBrowseClick = () => {
     fileInputRef.current?.click();
   };
@@ -189,7 +253,12 @@ export default function LandingPage() {
               <p className="text-slate-600">{Math.round(uploadProgress)}% complete</p>
             </div>
           ) : (
-            <UploadZone onFileUpload={handleFileUpload} onBrowseClick={handleBrowseClick} />
+            <UploadZone 
+              onFileUpload={handleFileUpload} 
+              onS3Upload={handleS3Upload}
+              onYouTubeUpload={handleYouTubeUpload}
+              onBrowseClick={handleBrowseClick} 
+            />
           )}
         </div>
         

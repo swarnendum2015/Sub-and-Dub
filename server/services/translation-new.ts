@@ -127,3 +127,56 @@ export async function translateText(transcriptionId: number, targetLanguage: str
   
   console.log(`[TRANSLATE] Success: "${transcription.text.substring(0, 30)}..." -> "${translation.text.substring(0, 30)}..."`);
 }
+
+export async function retranslateText(transcriptionId: number, targetLanguage: string) {
+  console.log(`[RETRANSLATE] Re-translating transcription ${transcriptionId} to ${targetLanguage}`);
+  
+  // Find the transcription
+  let transcription = null;
+  const allVideos = await storage.getAllVideos();
+  
+  for (const video of allVideos) {
+    const transcriptions = await storage.getTranscriptionsByVideoId(video.id);
+    const found = transcriptions.find(t => t.id === transcriptionId);
+    if (found) {
+      transcription = found;
+      break;
+    }
+  }
+  
+  if (!transcription) {
+    throw new Error(`Transcription ${transcriptionId} not found`);
+  }
+
+  try {
+    // Force re-translation by calling Gemini again
+    const result = await translateWithGemini(transcription.text, targetLanguage);
+    
+    console.log(`[RETRANSLATE] New translation result: "${result.text.substring(0, 50)}..."`);
+    
+    // Update existing translation
+    const existingTranslations = await storage.getTranslationsByTranscriptionId(transcriptionId);
+    const existing = existingTranslations.find(t => t.targetLanguage === targetLanguage);
+    
+    if (existing) {
+      // Update via storage interface
+      await storage.updateTranslation(existing.id, result.text);
+      console.log(`[RETRANSLATE] Updated existing translation ${existing.id}`);
+    } else {
+      // Create new translation
+      await storage.createTranslation({
+        transcriptionId,
+        targetLanguage,
+        translatedText: result.text,
+        confidence: result.confidence,
+        model: result.model
+      });
+      console.log(`[RETRANSLATE] Created new translation for ${transcriptionId} -> ${targetLanguage}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`[RETRANSLATE] Error re-translating transcription ${transcriptionId}:`, error);
+    throw error;
+  }
+}

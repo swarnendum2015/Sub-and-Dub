@@ -6,7 +6,7 @@ import fs from "fs";
 import { storage } from "./storage";
 import { insertVideoSchema } from "@shared/schema";
 import { transcribeVideo } from "./services/transcription";
-import { translateText } from "./services/translation-new";
+import { translateText, retranslateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
 
@@ -387,6 +387,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Re-translate specific transcription
+  app.post("/api/transcriptions/:id/retranslate", async (req, res) => {
+    try {
+      const transcriptionId = parseInt(req.params.id);
+      const { targetLanguage } = req.body;
+      
+      console.log(`Re-translating transcription ${transcriptionId} to ${targetLanguage}`);
+      
+      await retranslateText(transcriptionId, targetLanguage);
+      res.json({ message: "Re-translation completed successfully" });
+    } catch (error) {
+      console.error("Error in re-translation:", error);
+      res.status(500).json({ message: "Re-translation failed", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Download dubbing audio
   app.get("/api/videos/:videoId/dubbing/:dubbingId/download", async (req, res) => {
     try {
@@ -417,6 +433,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/videos/:id/srt", generateSRT);
 
   const httpServer = createServer(app);
+  // S3 video upload endpoint
+  app.post("/api/videos/upload-s3", async (req, res) => {
+    try {
+      const { s3Url, selectedModels } = req.body;
+      
+      if (!s3Url) {
+        return res.status(400).json({ error: "S3 URL is required" });
+      }
+      
+      // Validate S3 URL pattern
+      const s3Pattern = /^https?:\/\/[^\/]+\.s3[^\/]*\.amazonaws\.com\/.*$|^https?:\/\/s3[^\/]*\.amazonaws\.com\/[^\/]+\/.*$/;
+      if (!s3Pattern.test(s3Url)) {
+        return res.status(400).json({ error: "Invalid S3 URL format" });
+      }
+      
+      const video = await storage.createVideo({
+        filename: s3Url.split('/').pop() || 'S3_Video',
+        originalName: s3Url.split('/').pop() || 'S3_Video',
+        filePath: s3Url,
+        status: 'pending',
+      });
+      
+      // Start processing the video with selected models
+      processVideoWithTimeout(video.id, selectedModels).catch(console.error);
+      
+      res.json({ videoId: video.id, message: "S3 video processing started" });
+    } catch (error) {
+      console.error("Error processing S3 video:", error);
+      res.status(500).json({ error: "Failed to process S3 video" });
+    }
+  });
+
+  // YouTube video upload endpoint
+  app.post("/api/videos/upload-youtube", async (req, res) => {
+    try {
+      const { youtubeUrl, selectedModels } = req.body;
+      
+      if (!youtubeUrl) {
+        return res.status(400).json({ error: "YouTube URL is required" });
+      }
+      
+      // Validate YouTube URL pattern
+      const youtubePattern = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+/;
+      if (!youtubePattern.test(youtubeUrl)) {
+        return res.status(400).json({ error: "Invalid YouTube URL format" });
+      }
+      
+      // Extract video ID from URL
+      const videoId = youtubeUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1];
+      if (!videoId) {
+        return res.status(400).json({ error: "Could not extract video ID from YouTube URL" });
+      }
+      
+      const video = await storage.createVideo({
+        filename: `youtube_${videoId}`,
+        originalName: `YouTube: ${videoId}`,
+        filePath: youtubeUrl,
+        status: 'pending',
+      });
+      
+      // Start processing the video with selected models
+      processVideoWithTimeout(video.id, selectedModels).catch(console.error);
+      
+      res.json({ videoId: video.id, message: "YouTube video processing started" });
+    } catch (error) {
+      console.error("Error processing YouTube video:", error);
+      res.status(500).json({ error: "Failed to process YouTube video" });
+    }
+  });
+
   return httpServer;
 }
 

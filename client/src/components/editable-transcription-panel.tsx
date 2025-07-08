@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   Mic, Save, Edit, Check, X, Languages, AlertCircle, 
-  Clock, CheckCircle, Loader2, FileAudio, Download 
+  Clock, CheckCircle, Loader2, FileAudio, Download, RefreshCw 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -232,6 +232,31 @@ export function EditableTranscriptionPanel({
       toast({
         title: "Translation failed",
         description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Retranslate specific transcription mutation
+  const retranslateMutation = useMutation({
+    mutationFn: async ({ transcriptionId, language }: { transcriptionId: number; language: string }) => {
+      return apiRequest('POST', `/api/transcriptions/${transcriptionId}/retranslate`, { targetLanguage: language });
+    },
+    onSuccess: () => {
+      // Invalidate translations to refetch updated data
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
+      transcriptions.forEach((t: Transcription) => {
+        queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${t.id}/translations`] });
+      });
+      toast({
+        title: "Re-translation completed",
+        description: "Translation has been updated with new content.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Re-translation failed",
+        description: error.message || "Failed to re-translate text",
         variant: "destructive",
       });
     },
@@ -760,17 +785,38 @@ export function EditableTranscriptionPanel({
                       </Badge>
                     )}
                     {!isEditing && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(displayItem!, currentLanguage !== 'bn');
-                        }}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Edit className="w-3 h-3" />
-                      </Button>
+                      <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {currentLanguage !== 'bn' && displayItem?.text && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              retranslateMutation.mutate({ 
+                                transcriptionId: transcription.id, 
+                                language: currentLanguage 
+                              });
+                            }}
+                            disabled={retranslateMutation.isPending}
+                            className="h-6 px-2"
+                            title="Re-verify translation"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${retranslateMutation.isPending ? 'animate-spin' : ''}`} />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(displayItem!, currentLanguage !== 'bn');
+                          }}
+                          className="h-6 px-2"
+                          title="Edit text"
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>

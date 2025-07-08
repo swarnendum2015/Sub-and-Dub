@@ -166,6 +166,16 @@ Changelog:
   - Removed all fallback/demo translations - now only uses authentic Gemini translations
   - Cleared corrupted translation data containing "[Unable to translate]" entries
   - Enhanced translation workflow to invalidate cache when Bengali text is edited or confirmed
+
+- July 08, 2025. S3/YouTube Integration and Re-verification Features
+  - Added S3 bucket upload support with URL validation and automatic processing
+  - Implemented YouTube URL upload with yt-dlp integration for video processing
+  - Created tabbed upload interface supporting file upload, S3 buckets, and YouTube URLs
+  - Added backend API endpoints for S3 and YouTube video processing
+  - Enhanced transcription service to handle remote URLs (S3/YouTube) in addition to local files
+  - Implemented re-verification buttons for individual translation segments
+  - Added retranslation API endpoint for refreshing specific transcription translations
+  - Optimized UI with hover-based re-verification and edit controls for better user experience
 ```
 
 ## User Preferences

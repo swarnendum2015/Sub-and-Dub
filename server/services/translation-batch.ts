@@ -47,12 +47,14 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
       throw new Error("No transcriptions found for this video");
     }
     
-    // Filter only confirmed transcriptions
-    const confirmedTranscriptions = transcriptions.filter(t => t.isConfirmed);
-    
-    if (confirmedTranscriptions.length === 0) {
-      throw new Error("No confirmed Bengali transcriptions found. Please confirm the Bengali text first.");
+    // Check if Bengali is confirmed for the video
+    const video = await storage.getVideo(videoId);
+    if (!video?.bengaliConfirmed) {
+      throw new Error("Bengali transcription not confirmed. Please confirm the Bengali text first.");
     }
+    
+    // Use all Bengali transcriptions when video is confirmed
+    const confirmedTranscriptions = transcriptions;
     
     console.log(`[BATCH_TRANSLATE] Found ${confirmedTranscriptions.length} confirmed transcriptions`);
     

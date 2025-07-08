@@ -112,7 +112,7 @@ export function EditableTranscriptionPanel({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ language }),
+        body: JSON.stringify({ targetLanguage: language }),
       });
       
       if (!response.ok) {

@@ -93,14 +93,17 @@ export function EditableTranscriptionPanel({
     enabled: !!videoId,
   });
 
-  const { data: video } = useQuery({
+  const { data: video, refetch: refetchVideo } = useQuery({
     queryKey: ['/api/videos', videoId],
     queryFn: async () => {
       const response = await fetch(`/api/videos/${videoId}`);
       if (!response.ok) throw new Error('Failed to fetch video');
-      return response.json();
+      const data = await response.json();
+      console.log('Video data fetched:', data);
+      return data;
     },
     enabled: !!videoId,
+    refetchInterval: 1000, // Refetch every second to ensure UI stays updated
   });
 
   // Helper functions
@@ -143,6 +146,10 @@ export function EditableTranscriptionPanel({
 
   const bengaliConfirmed = video?.bengaliConfirmed;
   const currentSegment = getCurrentSegment();
+  
+  // Debug logging
+  console.log('Video data:', video);
+  console.log('Bengali confirmed status:', bengaliConfirmed);
 
   // Mutations
   const confirmBengaliMutation = useMutation({
@@ -155,9 +162,10 @@ export function EditableTranscriptionPanel({
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate video data to update bengaliConfirmed status
-      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
-      toast({ title: "Bengali transcription confirmed" });
+      // Force immediate refetch of video data
+      refetchVideo();
+      queryClient.invalidateQueries({ queryKey: ['/api/videos'] });
+      toast({ title: "Bengali transcription confirmed successfully" });
     },
   });
 
@@ -315,12 +323,20 @@ export function EditableTranscriptionPanel({
       <div className="p-4 border-b bg-slate-50">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-800">Transcription & Translation</h2>
-          {bengaliConfirmed && (
-            <Badge className="bg-green-100 text-green-700">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Bengali Confirmed
-            </Badge>
-          )}
+          <div className="flex items-center space-x-2">
+            {bengaliConfirmed ? (
+              <Badge className="bg-green-100 text-green-700">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Bengali Confirmed
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                Pending Confirmation
+              </Badge>
+            )}
+            <span className="text-xs text-gray-500">Video ID: {videoId}</span>
+          </div>
         </div>
         
         {/* Language Tabs */}
@@ -350,6 +366,7 @@ export function EditableTranscriptionPanel({
             <TabsContent key={lang} value={lang} className="mt-4">
               {(() => {
                 if (lang === 'bn') {
+                  console.log('Bengali tab - confirmed status:', bengaliConfirmed);
                   if (!bengaliConfirmed) {
                     return (
                       <div className="space-y-3">
@@ -406,6 +423,7 @@ export function EditableTranscriptionPanel({
                         size="sm" 
                         onClick={() => translateMutation.mutate(lang)}
                         disabled={translateMutation.isPending || !bengaliConfirmed}
+                        title={!bengaliConfirmed ? 'Please confirm Bengali transcription first' : ''}
                         className={`w-full ${!bengaliConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
                         {translateMutation.isPending ? (

@@ -214,13 +214,20 @@ export function EditableTranscriptionPanel({
     },
     onSuccess: (_, variables) => {
       toast({
-        title: "Translation started",
-        description: `Translating to ${getLanguageName(variables.language)}...`,
+        title: "Translation completed",
+        description: `Successfully translated to ${getLanguageName(variables.language)}`,
       });
-      // Start polling for translations
-      setTimeout(() => {
-        refetchTranslations();
-      }, 2000);
+      // Immediately invalidate all translation queries to force refresh
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
+      transcriptions.forEach((t: Transcription) => {
+        queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${t.id}/translations`] });
+      });
+      // Remove from translating set
+      setTranslatingLanguages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(variables.language);
+        return newSet;
+      });
     },
     onError: (error, variables) => {
       // Remove language from translating set

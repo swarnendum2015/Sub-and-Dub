@@ -45,11 +45,40 @@ export function EditableTranscriptionPanel({
   const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>("combined"); // For Bengali model selection
   const [selectedTranslationModel, setSelectedTranslationModel] = useState<string>("gemini"); // For translation model selection
   
+  // Fetch video data to get confirmation status
+  const { data: videoData } = useQuery({
+    queryKey: [`/api/videos/${videoId}`],
+    refetchInterval: 5000,
+  });
+
   // Fetch transcriptions with proper error handling
   const { data: transcriptions = [], isLoading: transcriptionsLoading, error: transcriptionsError } = useQuery({
     queryKey: [`/api/videos/${videoId}/transcriptions`],
     refetchInterval: bengaliConfirmed ? false : 5000,
   });
+
+  // Update Bengali confirmation status from video data
+  useEffect(() => {
+    if (videoData && videoData.bengaliConfirmed !== undefined) {
+      setBengaliConfirmed(videoData.bengaliConfirmed);
+    }
+  }, [videoData]);
+
+  // Detect speaker count from transcriptions
+  useEffect(() => {
+    if (transcriptions.length > 0) {
+      const uniqueSpeakers = new Set(transcriptions.map((t: Transcription) => t.speakerId).filter(Boolean));
+      const detectedSpeakerCount = Math.max(1, uniqueSpeakers.size);
+      if (detectedSpeakerCount !== speakerCount) {
+        setSpeakerCount(detectedSpeakerCount);
+        // Initialize voice IDs array for detected speakers
+        const newVoiceIds = Array.from({ length: detectedSpeakerCount }, (_, i) => 
+          selectedVoiceIds[i] || (i === 0 ? "21m00Tcm4TlvDq8ikWAM" : "EXAVITQu4vr4xnSDxMaL")
+        );
+        setSelectedVoiceIds(newVoiceIds);
+      }
+    }
+  }, [transcriptions, speakerCount, selectedVoiceIds]);
   
   // Fetch all translations at once
   const { data: allTranslations = {}, isLoading: translationsLoading, refetch: refetchTranslations } = useQuery({
@@ -90,12 +119,15 @@ export function EditableTranscriptionPanel({
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/transcriptions`] });
       
-      // If Bengali transcription was edited, mark it as unconfirmed
+      // If Bengali transcription was edited, mark it as unconfirmed and update video status
       const editedTranscription = transcriptions.find(t => t.id === variables.id);
       if (editedTranscription?.language === 'bn') {
         setBengaliConfirmed(false);
+        // Update video Bengali confirmation status to false
+        apiRequest('POST', `/api/videos/${videoId}/unconfirm-transcription`);
         // Clear existing translations since Bengali text changed
         queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}`] });
         toast({
           title: "Bengali transcription updated",
           description: "Transcription is now unconfirmed. Please review and confirm before translating.",
@@ -150,6 +182,8 @@ export function EditableTranscriptionPanel({
     },
     onSuccess: () => {
       setBengaliConfirmed(true);
+      // Invalidate video data to refresh confirmation status
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}`] });
       // Clear existing translations when Bengali is confirmed - they'll need to be regenerated
       queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
       toast({
@@ -205,8 +239,18 @@ export function EditableTranscriptionPanel({
   
   // Trigger dubbing mutation
   const triggerDubbingMutation = useMutation({
-    mutationFn: async ({ language, voiceId }: { language: string; voiceId?: string }) => {
-      return apiRequest('POST', `/api/videos/${videoId}/dubbing`, { language, voiceId });
+    mutationFn: async ({ language, voiceId, voiceIds, speakerCount }: { 
+      language: string; 
+      voiceId?: string; 
+      voiceIds?: string[]; 
+      speakerCount?: number; 
+    }) => {
+      return apiRequest('POST', `/api/videos/${videoId}/dubbing`, { 
+        language, 
+        voiceId, 
+        voiceIds: voiceIds || [voiceId || "21m00Tcm4TlvDq8ikWAM"], 
+        speakerCount: speakerCount || 1 
+      });
     },
     onMutate: (variables) => {
       setDubbingLanguages(prev => new Set([...prev, variables.language]));
@@ -520,42 +564,94 @@ export function EditableTranscriptionPanel({
                       Generate audio dubbing in {getLanguageName(currentLanguage)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-end space-x-2">
-                    <Select value={selectedVoiceIds[0] || "21m00Tcm4TlvDq8ikWAM"} onValueChange={(value) => setSelectedVoiceIds([value])}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select voice" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {currentLanguage === 'en' && (
-                          <>
-                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</SelectItem>
-                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Bella (Female)</SelectItem>
-                            <SelectItem value="AZnzlk1XvdvUeBnXmlld">Domi (Female)</SelectItem>
-                            <SelectItem value="ErXwobaYiN019PkySvjV">Antoni (Male)</SelectItem>
-                            <SelectItem value="VR6AewLTigWG4xSOukaG">Arnold (Male)</SelectItem>
-                            <SelectItem value="pNInz6obpgDQGcFmaJgB">Adam (Male)</SelectItem>
-                            <SelectItem value="yoZ06aMxZJJ28mfd3POQ">Sam (Male)</SelectItem>
-                          </>
-                        )}
-                        {(currentLanguage === 'hi' || currentLanguage === 'ta' || currentLanguage === 'te' || currentLanguage === 'ml') && (
-                          <>
-                            <SelectItem value="XB0fDUnXU5powFXDhCwa">Charlotte (Female, Indian)</SelectItem>
-                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie (Male, Indian)</SelectItem>
-                            <SelectItem value="onwK4e9ZLuTAKqWW03F9">Daniel (Male, Indian)</SelectItem>
-                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</SelectItem>
-                            <SelectItem value="ErXwobaYiN019PkySvjV">Antoni (Male)</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-3">
+                    {/* Speaker Count Selection */}
+                    <div className="flex items-center space-x-2">
+                      <label className="text-sm font-medium">Speakers:</label>
+                      <Select value={speakerCount.toString()} onValueChange={(value) => {
+                        const newCount = parseInt(value);
+                        setSpeakerCount(newCount);
+                        // Adjust voice IDs array
+                        const newVoiceIds = Array.from({ length: newCount }, (_, i) => 
+                          selectedVoiceIds[i] || (i === 0 ? "21m00Tcm4TlvDq8ikWAM" : "EXAVITQu4vr4xnSDxMaL")
+                        );
+                        setSelectedVoiceIds(newVoiceIds);
+                      }}>
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5].map(num => (
+                            <SelectItem key={num} value={num.toString()}>{num} Speaker{num > 1 ? 's' : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* Show detected speakers count */}
+                      {transcriptions.length > 0 && (
+                        <span className="text-xs text-slate-500">
+                          (Detected: {Math.max(1, new Set(transcriptions.map((t: Transcription) => t.speakerId).filter(Boolean)).size)} speakers)
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Voice Selection for each speaker */}
+                    <div className="space-y-2">
+                      {Array.from({ length: speakerCount }, (_, i) => (
+                        <div key={i} className="flex items-center space-x-2">
+                          <label className="text-sm w-16">Voice {i + 1}:</label>
+                          <Select 
+                            value={selectedVoiceIds[i] || "21m00Tcm4TlvDq8ikWAM"} 
+                            onValueChange={(value) => {
+                              const newVoices = [...selectedVoiceIds];
+                              newVoices[i] = value;
+                              setSelectedVoiceIds(newVoices);
+                            }}
+                          >
+                            <SelectTrigger className="w-[200px]">
+                              <SelectValue placeholder="Select voice" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {currentLanguage === 'en' && (
+                                <>
+                                  <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female, American)</SelectItem>
+                                  <SelectItem value="EXAVITQu4vr4xnSDxMaL">Bella (Female, American)</SelectItem>
+                                  <SelectItem value="AZnzlk1XvdvUeBnXmlld">Domi (Female, American)</SelectItem>
+                                  <SelectItem value="ErXwobaYiN019PkySvjV">Antoni (Male, American)</SelectItem>
+                                  <SelectItem value="VR6AewLTigWG4xSOukaG">Arnold (Male, American)</SelectItem>
+                                  <SelectItem value="pNInz6obpgDQGcFmaJgB">Adam (Male, American)</SelectItem>
+                                  <SelectItem value="yoZ06aMxZJJ28mfd3POQ">Sam (Male, American)</SelectItem>
+                                </>
+                              )}
+                              {(currentLanguage === 'hi' || currentLanguage === 'ta' || currentLanguage === 'te' || currentLanguage === 'ml') && (
+                                <>
+                                  <SelectItem value="XB0fDUnXU5powFXDhCwa">Charlotte (Female, Indian Accent)</SelectItem>
+                                  <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie (Male, Indian Accent)</SelectItem>
+                                  <SelectItem value="onwK4e9ZLuTAKqWW03F9">Daniel (Male, Indian Accent)</SelectItem>
+                                  <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female, American)</SelectItem>
+                                  <SelectItem value="ErXwobaYiN019PkySvjV">Antoni (Male, American)</SelectItem>
+                                  <SelectItem value="pNInz6obpgDQGcFmaJgB">Adam (Male, American)</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                    
                     <Button 
                       size="sm" 
                       variant="outline"
-                      onClick={() => triggerDubbingMutation.mutate({ language: currentLanguage, voiceId: selectedVoiceIds[0] || "21m00Tcm4TlvDq8ikWAM" })}
+                      onClick={() => triggerDubbingMutation.mutate({ 
+                        language: currentLanguage, 
+                        voiceId: selectedVoiceIds[0] || "21m00Tcm4TlvDq8ikWAM",
+                        voiceIds: selectedVoiceIds.slice(0, speakerCount),
+                        speakerCount 
+                      })}
                       disabled={triggerDubbingMutation.isPending}
+                      className="w-full"
                     >
                       <FileAudio className="w-4 h-4 mr-2" />
-                      Generate Dubbing
+                      Generate Dubbing ({speakerCount} Speaker{speakerCount > 1 ? 's' : ''})
                     </Button>
                   </div>
                 </div>
@@ -655,6 +751,12 @@ export function EditableTranscriptionPanel({
                     {displayItem?.confidence && (
                       <Badge className={`text-xs ${getConfidenceColor(displayItem.confidence)}`}>
                         {Math.round(displayItem.confidence * 100)}%
+                      </Badge>
+                    )}
+                    {/* Speaker identification */}
+                    {currentLanguage === 'bn' && transcription.speakerId && (
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+                        {transcription.speakerName || `Speaker ${transcription.speakerId}`}
                       </Badge>
                     )}
                     {!isEditing && (

@@ -71,6 +71,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single video
+  app.get("/api/videos/:id", async (req, res) => {
+    try {
+      const video = await storage.getVideo(parseInt(req.params.id));
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      res.json(video);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch video", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Get video by ID
   app.get("/api/videos/:id", async (req, res) => {
     try {
@@ -234,6 +247,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Confirm Bengali transcription
+  app.post("/api/videos/:id/confirm-transcription", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      const video = await storage.getVideo(videoId);
+      
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      
+      // Update video Bengali confirmation status
+      await storage.updateVideoBengaliConfirmed(videoId, true);
+      
+      res.json({ message: "Bengali transcription confirmed successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to confirm transcription", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Unconfirm Bengali transcription
+  app.post("/api/videos/:id/unconfirm-transcription", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      const video = await storage.getVideo(videoId);
+      
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      
+      // Update video Bengali confirmation status to false
+      await storage.updateVideoBengaliConfirmed(videoId, false);
+      
+      res.json({ message: "Bengali transcription unconfirmed successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to unconfirm transcription", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Fix stuck jobs endpoint
   app.post("/api/admin/fix-stuck-jobs", async (req: Request, res: Response) => {
     try {

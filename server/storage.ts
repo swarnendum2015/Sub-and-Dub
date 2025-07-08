@@ -22,6 +22,7 @@ export interface IStorage {
   getAllVideos(): Promise<Video[]>;
   updateVideoStatus(id: number, status: string): Promise<void>;
   updateVideoDuration(id: number, duration: number): Promise<void>;
+  updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void>;
 
   // Transcription operations
   createTranscription(transcription: InsertTranscription): Promise<Transcription>;
@@ -64,6 +65,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateVideoDuration(id: number, duration: number): Promise<void> {
     await db.update(videos).set({ duration }).where(eq(videos.id, id));
+  }
+
+  async updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void> {
+    await db.update(videos).set({ bengaliConfirmed: confirmed }).where(eq(videos.id, id));
   }
 
   async createTranscription(insertTranscription: InsertTranscription): Promise<Transcription> {
@@ -157,6 +162,14 @@ export class MemStorage implements IStorage {
     const video = this.videos.get(id);
     if (video) {
       video.status = status;
+      this.videos.set(id, video);
+    }
+  }
+
+  async updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void> {
+    const video = this.videos.get(id);
+    if (video) {
+      video.bengaliConfirmed = confirmed;
       this.videos.set(id, video);
     }
   }

@@ -383,10 +383,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Video not found" });
       }
       
-      // Just confirm without starting any translations
+      // Update the database to mark Bengali as confirmed
+      await storage.updateVideoBengaliConfirmed(videoId, true);
       console.log(`Bengali transcription confirmed for video ${videoId}`);
       
-      res.json({ message: "Bengali transcription confirmed", videoId });
+      res.json({ message: "Bengali transcription confirmed successfully", videoId });
     } catch (error) {
       console.error("Error confirming transcription:", error);
       res.status(500).json({ error: "Failed to confirm transcription" });

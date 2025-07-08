@@ -74,12 +74,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint for batch translation functionality
   app.post("/api/test-batch-translation", async (req: Request, res: Response) => {
     try {
-      // Create a test video with confirmed Bengali transcriptions
+      // Create a test video with confirmed Bengali transcriptions using actual video file
       const testVideo = await storage.createVideo({
-        filename: "test-video.mov",
-        originalName: "Test Video.mov",
-        filePath: "test/path.mov",
-        fileSize: 1000000,
+        filename: "birangana-test.mov",
+        originalName: "Birangana Test Video.mov",
+        filePath: "attached_assets/Birangana Trailer Revised3_1751984055833.mov",
+        fileSize: 32560929,
         status: "completed",
       });
       

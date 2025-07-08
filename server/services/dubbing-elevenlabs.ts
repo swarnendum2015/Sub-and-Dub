@@ -112,7 +112,7 @@ async function createDubbingStudioJob(audioPath: string, targetLanguage: string)
   formData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), path.basename(audioPath));
   formData.append('target_lang', targetLangCode);
   formData.append('mode', 'automatic'); // or 'manual' for more control
-  formData.append('watermark', 'false'); // Remove watermark if you have a paid plan
+  formData.append('watermark', 'true'); // Set to true for free accounts, false for Creator+ users
   
   console.log(`[DUBBING_STUDIO] Creating dubbing job for language: ${targetLangCode}`);
   

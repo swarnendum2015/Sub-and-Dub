@@ -11,6 +11,8 @@ export const videos = pgTable("videos", {
   fileSize: integer("file_size").notNull(),
   duration: real("duration"),
   status: text("status").notNull().default("uploaded"), // uploaded, processing, completed, failed
+  bengaliConfirmed: boolean("bengali_confirmed").default(false),
+  speakerCount: integer("speaker_count").default(1), // Number of speakers detected
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -23,6 +25,8 @@ export const transcriptions = pgTable("transcriptions", {
   endTime: real("end_time").notNull(),
   confidence: real("confidence"),
   isOriginal: boolean("is_original").default(false),
+  speakerId: integer("speaker_id"), // For multi-speaker support
+  speakerName: text("speaker_name"), // Speaker identification
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -155,6 +155,17 @@ Changelog:
   - Improved responsive design with better loading states and error messages
   - Added validation feedback for model selection and file upload
   - Polished overall UI to look like a finished production application
+
+- July 08, 2025. Advanced Features: Dynamic Confirmation, Speaker ID, Multi-Voice Dubbing
+  - Implemented dynamic confirmation status - Bengali becomes unconfirmed when edited
+  - Added speaker identification fields to transcription schema (speakerId, speakerName)
+  - Created ElevenLabs voice service with language-specific voice recommendations
+  - Added multiple voice selection support based on number of speakers detected
+  - Enhanced dubbing UI with speaker count selection and per-speaker voice assignment
+  - Added language-specific voice recommendations (Indian voices for Hindi/Tamil/Telugu/Malayalam)
+  - Removed all fallback/demo translations - now only uses authentic Gemini translations
+  - Cleared corrupted translation data containing "[Unable to translate]" entries
+  - Enhanced translation workflow to invalidate cache when Bengali text is edited or confirmed
 ```
 
 ## User Preferences

@@ -42,7 +42,7 @@ export function EditableTranscriptionPanel({
   const [dubbingLanguages, setDubbingLanguages] = useState<Set<string>>(new Set());
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>("21m00Tcm4TlvDq8ikWAM"); // Default Rachel voice
   const [selectedTranscriptionModel, setSelectedTranscriptionModel] = useState<string>("combined"); // For Bengali model selection
-  const [selectedTranslationModel, setSelectedTranslationModel] = useState<string>("best"); // For translation model selection
+  const [selectedTranslationModel, setSelectedTranslationModel] = useState<string>("gemini"); // For translation model selection
   
   // Fetch transcriptions with proper error handling
   const { data: transcriptions = [], isLoading: transcriptionsLoading, error: transcriptionsError } = useQuery({
@@ -151,8 +151,11 @@ export function EditableTranscriptionPanel({
   
   // Trigger translation mutation
   const triggerTranslationMutation = useMutation({
-    mutationFn: async ({ language }: { language: string }) => {
-      return apiRequest('POST', `/api/videos/${videoId}/translate`, { targetLanguage: language });
+    mutationFn: async ({ language, model }: { language: string; model?: string }) => {
+      return apiRequest('POST', `/api/videos/${videoId}/translate`, { 
+        targetLanguage: language,
+        selectedModel: model || selectedTranslationModel 
+      });
     },
     onMutate: (variables) => {
       // Add language to translating set
@@ -440,10 +443,24 @@ export function EditableTranscriptionPanel({
                     <span className="text-sm text-slate-700">
                       No {getLanguageName(currentLanguage)} translation available
                     </span>
+                  </div>
+                  
+                  {/* Translation Model Selection */}
+                  <div className="flex items-center space-x-3">
+                    <label className="text-sm font-medium text-slate-700">Translation model:</label>
+                    <Select value={selectedTranslationModel} onValueChange={setSelectedTranslationModel}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gemini">Gemini 2.5 Pro</SelectItem>
+                        <SelectItem value="openai">OpenAI GPT-4</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button 
                       size="sm" 
                       variant="outline"
-                      onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
+                      onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage, model: selectedTranslationModel })}
                       disabled={triggerTranslationMutation.isPending}
                     >
                       <Languages className="w-4 h-4 mr-2" />
@@ -462,10 +479,8 @@ export function EditableTranscriptionPanel({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="best">Best Available</SelectItem>
                       <SelectItem value="gemini">Gemini 2.5 Pro</SelectItem>
                       <SelectItem value="openai">OpenAI GPT-4</SelectItem>
-                      <SelectItem value="demo">Demo/Fallback</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

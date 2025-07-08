@@ -81,49 +81,8 @@ ${targetLangName} translation:`
   }
 }
 
-// Fallback translations for demo purposes
-function getFallbackTranslation(text: string, targetLanguage: string): { text: string; confidence: number; model: string } {
-  const specificTranslations: Record<string, Record<string, string>> = {
-    "অঞ্জন দত্তের পরিচালনায় চারচিত্র এখন সিনেমাটা অলরেডি বেরিয়ে গেছে ভিন্ন স্বাদের একটি সিনেমা।": {
-      en: "The movie 'Chalchitra Ekhon' directed by Anjan Dutta has already been released, it's a cinema with a different flavor."
-    },
-    "আপনারা সবাই অলরেডি জানেন।": {
-      en: "All of you already know."
-    },
-    "ওটিটিতে বেরিয়েছে, হইচই-এ বেরিয়েছে এবং কিছু সিলেক্টেড থিয়েটারেস বেরিয়েছে।": {
-      en: "Released on OTT, available on Hoichoi and showing in selected theaters."
-    },
-    "তো আপনারা সবাই যেখানে পারেন সিনেমাটা দেখে নিন প্লিজ।": {
-      en: "So please watch the movie wherever you can."
-    },
-    "আমরা খুব এক্সাইটেড আপনাদের দেখানোর জন্য সিনেমাটা।": {
-      en: "We are very excited to show you the movie."
-    }
-  };
+// Removed fallback translations - only using real Gemini translations
 
-  if (specificTranslations[text]?.[targetLanguage]) {
-    return {
-      text: specificTranslations[text][targetLanguage],
-      confidence: 0.85,
-      model: "fallback"
-    };
-  }
-
-  // Generic fallback
-  const fallbackTranslations: Record<string, string> = {
-    'en': `[Unable to translate] ${text.substring(0, 50)}...`,
-    'hi': 'यह बंगाली भाषा में एक वीडियो सामग्री है।',
-    'ta': 'இது வங்காள மொழியில் உள்ள வீடியோ உள்ளடக்கம்.',
-    'te': 'ఇది బెంగాలీలో ఉన్న వీడియో కంటెంట్.',
-    'ml': 'ഇത് ബംഗാളിയിലുള്ള വീഡിയോ ഉള്ളടക്കമാണ്.'
-  };
-
-  return {
-    text: fallbackTranslations[targetLanguage] || `[Translation not available for ${targetLanguage}]`,
-    confidence: 0.5,
-    model: "fallback"
-  };
-}
 
 export async function translateText(transcriptionId: number, targetLanguage: string) {
   console.log(`[TRANSLATE] Starting translation for transcription ${transcriptionId} to ${targetLanguage}`);
@@ -154,33 +113,17 @@ export async function translateText(transcriptionId: number, targetLanguage: str
     return;
   }
 
-  // Perform translation
-  try {
-    const translation = await translateWithGemini(transcription.text, targetLanguage);
-    
-    // Store the translation
-    await storage.createTranslation({
-      transcriptionId,
-      targetLanguage,
-      translatedText: translation.text,
-      confidence: translation.confidence,
-      model: translation.model
-    });
-    
-    console.log(`[TRANSLATE] Success: "${transcription.text.substring(0, 30)}..." -> "${translation.text.substring(0, 30)}..."`);
-  } catch (error) {
-    console.error(`[TRANSLATE] Failed for transcription ${transcriptionId}:`, error);
-    
-    // Use fallback translation
-    const fallback = getFallbackTranslation(transcription.text, targetLanguage);
-    await storage.createTranslation({
-      transcriptionId,
-      targetLanguage,
-      translatedText: fallback.text,
-      confidence: fallback.confidence,
-      model: fallback.model
-    });
-    
-    console.log(`[TRANSLATE] Used fallback for transcription ${transcriptionId}`);
-  }
+  // Perform translation - only use real Gemini translation, no fallbacks
+  const translation = await translateWithGemini(transcription.text, targetLanguage);
+  
+  // Store the translation
+  await storage.createTranslation({
+    transcriptionId,
+    targetLanguage,
+    translatedText: translation.text,
+    confidence: translation.confidence,
+    model: translation.model
+  });
+  
+  console.log(`[TRANSLATE] Success: "${transcription.text.substring(0, 30)}..." -> "${translation.text.substring(0, 30)}..."`);
 }

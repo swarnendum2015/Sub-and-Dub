@@ -133,6 +133,9 @@ Changelog:
   - Combined transcription results for higher confidence
   - Fixed demo Bengali text issue - now returns actual transcriptions
   - Improved error messages for quota exceeded scenarios
+  - Modified translation flow - now requires manual trigger instead of automatic
+  - Added translation progress tracking with real-time updates
+  - Implemented per-language translation status and completion detection
 ```
 
 ## User Preferences

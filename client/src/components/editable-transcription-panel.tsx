@@ -31,6 +31,7 @@ export function EditableTranscriptionPanel({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingText, setEditingText] = useState("");
   const [bengaliConfirmed, setBengaliConfirmed] = useState(false);
+  const [translatingLanguages, setTranslatingLanguages] = useState<Set<string>>(new Set());
   
   // Fetch transcriptions
   const { data: transcriptions = [], isLoading: transcriptionsLoading } = useQuery({
@@ -39,10 +40,10 @@ export function EditableTranscriptionPanel({
   });
   
   // Fetch all translations at once
-  const { data: allTranslations = {}, isLoading: translationsLoading } = useQuery({
+  const { data: allTranslations = {}, isLoading: translationsLoading, refetch: refetchTranslations } = useQuery({
     queryKey: [`/api/videos/${videoId}/all-translations`],
     queryFn: async () => {
-      if (!bengaliConfirmed || transcriptions.length === 0) return {};
+      if (transcriptions.length === 0) return {};
       
       const translationMap: Record<number, Translation[]> = {};
       
@@ -64,7 +65,7 @@ export function EditableTranscriptionPanel({
       return translationMap;
     },
     enabled: bengaliConfirmed && transcriptions.length > 0,
-    refetchInterval: bengaliConfirmed ? 5000 : false,
+    refetchInterval: translatingLanguages.size > 0 ? 3000 : false,
   });
   
   // Update transcription mutation
@@ -140,15 +141,27 @@ export function EditableTranscriptionPanel({
     mutationFn: async ({ language }: { language: string }) => {
       return apiRequest('POST', `/api/videos/${videoId}/translate`, { targetLanguage: language });
     },
+    onMutate: (variables) => {
+      // Add language to translating set
+      setTranslatingLanguages(prev => new Set([...prev, variables.language]));
+    },
     onSuccess: (_, variables) => {
       toast({
         title: "Translation started",
         description: `Translating to ${getLanguageName(variables.language)}...`,
       });
-      // Invalidate all translations query
-      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
+      // Start polling for translations
+      setTimeout(() => {
+        refetchTranslations();
+      }, 2000);
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      // Remove language from translating set
+      setTranslatingLanguages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(variables.language);
+        return newSet;
+      });
       toast({
         title: "Translation failed",
         description: error.message,
@@ -216,6 +229,34 @@ export function EditableTranscriptionPanel({
     return translations.find((t: Translation) => t.targetLanguage === currentLanguage);
   };
   
+  // Check if translations are complete for a language
+  useEffect(() => {
+    if (translatingLanguages.size > 0 && allTranslations) {
+      translatingLanguages.forEach(lang => {
+        const hasAllTranslations = transcriptions.every((t: Transcription) => {
+          const translations = allTranslations[t.id] || [];
+          return translations.some((trans: Translation) => trans.targetLanguage === lang);
+        });
+        
+        if (hasAllTranslations) {
+          // Remove from translating set
+          setTranslatingLanguages(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(lang);
+            return newSet;
+          });
+          
+          if (lang === currentLanguage) {
+            toast({
+              title: "Translation complete",
+              description: `${getLanguageName(lang)} translation is ready!`,
+            });
+          }
+        }
+      });
+    }
+  }, [allTranslations, transcriptions, translatingLanguages, currentLanguage]);
+  
   return (
     <div className="flex flex-col h-full">
       {/* Header with Language Tabs */}
@@ -276,33 +317,50 @@ export function EditableTranscriptionPanel({
       )}
       
       {/* Translation Trigger */}
-      {bengaliConfirmed && currentLanguage !== 'bn' && (
-        <div className="p-4 bg-blue-50 border-b border-blue-200">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-blue-900">
-              Translate Bengali to {getLanguageName(currentLanguage)}
-            </span>
-            <Button 
-              size="sm" 
-              variant="outline"
-              onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
-              disabled={triggerTranslationMutation.isPending}
-            >
-              {triggerTranslationMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Translating...
-                </>
-              ) : (
-                <>
-                  <Languages className="w-4 h-4 mr-2" />
-                  Translate
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
+      {bengaliConfirmed && currentLanguage !== 'bn' && (() => {
+        // Check if translations exist for any transcription in current language
+        const hasTranslations = transcriptions.some((t: Transcription) => {
+          const translations = allTranslations[t.id] || [];
+          return translations.some((trans: Translation) => trans.targetLanguage === currentLanguage);
+        });
+        
+        const isTranslating = translatingLanguages.has(currentLanguage);
+        
+        if (!hasTranslations && !isTranslating) {
+          return (
+            <div className="p-4 bg-blue-50 border-b border-blue-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-blue-900">
+                  Translate Bengali to {getLanguageName(currentLanguage)}
+                </span>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => triggerTranslationMutation.mutate({ language: currentLanguage })}
+                  disabled={triggerTranslationMutation.isPending}
+                >
+                  <>
+                    <Languages className="w-4 h-4 mr-2" />
+                    Translate
+                  </>
+                </Button>
+              </div>
+            </div>
+          );
+        } else if (isTranslating) {
+          return (
+            <div className="p-4 bg-amber-50 border-b border-amber-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-amber-900">
+                  Translating to {getLanguageName(currentLanguage)}...
+                </span>
+                <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
       
       {/* Transcription/Translation Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">

@@ -271,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Confirm Bengali transcription and translate to English only
+  // Confirm Bengali transcription (no automatic translation)
   app.post("/api/videos/:id/confirm-transcription", async (req: Request, res: Response) => {
     const videoId = parseInt(req.params.id);
     
@@ -281,21 +281,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Video not found" });
       }
       
-      const transcriptions = await storage.getTranscriptionsByVideoId(videoId);
+      // Just confirm without starting any translations
+      console.log(`Bengali transcription confirmed for video ${videoId}`);
       
-      // Start English translation only after confirmation
-      console.log(`Starting English translation after Bengali confirmation for video ${videoId}`);
-      for (const transcription of transcriptions) {
-        try {
-          console.log(`Starting English translation for transcription ${transcription.id}`);
-          await translateText(transcription.id, "en");
-          console.log(`English translation completed for transcription ${transcription.id}`);
-        } catch (error) {
-          console.error(`Error translating transcription ${transcription.id}:`, error);
-        }
-      }
-      
-      res.json({ message: "Bengali transcription confirmed and English translation started", videoId });
+      res.json({ message: "Bengali transcription confirmed", videoId });
     } catch (error) {
       console.error("Error confirming transcription:", error);
       res.status(500).json({ error: "Failed to confirm transcription" });
@@ -306,6 +295,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/videos/:id/translate", async (req: Request, res: Response) => {
     const videoId = parseInt(req.params.id);
     const { targetLanguage } = req.body;
+    
+    if (!targetLanguage) {
+      return res.status(400).json({ error: "Target language is required" });
+    }
     
     try {
       const video = await storage.getVideo(videoId);

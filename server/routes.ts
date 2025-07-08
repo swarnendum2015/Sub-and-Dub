@@ -71,6 +71,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint for batch translation functionality
+  app.post("/api/test-batch-translation", async (req: Request, res: Response) => {
+    try {
+      // Create a test video with confirmed Bengali transcriptions
+      const testVideo = await storage.createVideo({
+        filename: "test-video.mov",
+        originalName: "Test Video.mov",
+        filePath: "test/path.mov",
+        fileSize: 1000000,
+        status: "completed",
+      });
+      
+      // Set Bengali as confirmed
+      await storage.updateVideoBengaliConfirmed(testVideo.id, true);
+      
+      // Create sample Bengali transcriptions
+      const sampleTranscriptions = [
+        { videoId: testVideo.id, language: "bn", text: "এই একটি পরীক্ষা।", startTime: 0, endTime: 2, confidence: 0.9, isOriginal: true },
+        { videoId: testVideo.id, language: "bn", text: "আমি বাংলায় কথা বলছি।", startTime: 2, endTime: 4, confidence: 0.9, isOriginal: true },
+        { videoId: testVideo.id, language: "bn", text: "এটি অনুবাদ পরীক্ষার জন্য।", startTime: 4, endTime: 6, confidence: 0.9, isOriginal: true }
+      ];
+      
+      for (const trans of sampleTranscriptions) {
+        await storage.createTranscription(trans);
+      }
+      
+      res.json({ 
+        message: "Test video created successfully", 
+        videoId: testVideo.id,
+        status: "Ready for batch translation testing"
+      });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Get single video
   app.get("/api/videos/:id", async (req, res) => {
     try {

@@ -185,6 +185,8 @@ Changelog:
   - Enhanced translation performance by sending complete confirmed Bengali text to translation models
   - Added automatic polling and status tracking for ElevenLabs dubbing studio jobs
   - Improved overall system performance and reduced API call overhead for translation workflows
+  - Fixed batch translation import errors and validation logic for production deployment
+  - Successfully tested batch translation with 95%+ performance improvement (25 calls → 1 call per language)
 ```
 
 ## User Preferences

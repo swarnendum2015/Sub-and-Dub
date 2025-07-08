@@ -146,8 +146,10 @@ export function EditableTranscriptionPanel({
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate video data to update bengaliConfirmed status
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
-      toast({ title: "Bengali transcription confirmed" });
+      // Force refresh to update the UI state
+      window.location.reload();
     },
   });
 
@@ -198,9 +200,11 @@ export function EditableTranscriptionPanel({
       if (!response.ok) throw new Error('Failed to retranslate');
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, { transcriptionId }) => {
+      // Invalidate specific transcription translation query
+      queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${transcriptionId}/translations`] });
       queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
-      toast({ title: "Translation refreshed" });
+      toast({ title: "Translation refreshed successfully" });
     },
   });
 
@@ -215,8 +219,13 @@ export function EditableTranscriptionPanel({
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate all translation-related queries
       queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
-      toast({ title: "Translation started" });
+      // Also invalidate individual transcription translation queries
+      transcriptions.forEach((transcription: Transcription) => {
+        queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${transcription.id}/translations`] });
+      });
+      toast({ title: "Translation completed successfully" });
     },
   });
 

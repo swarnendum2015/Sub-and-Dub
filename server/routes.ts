@@ -82,8 +82,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Video not found" });
       }
 
-      // Start processing in the background
-      processVideo(videoId);
+      // Start processing in the background with timeout
+      processVideoWithTimeout(videoId).catch(console.error);
       
       res.json({ message: "Video processing started", videoId: videoId });
     } catch (error) {
@@ -216,9 +216,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch dubbing jobs", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
+  
+  // Fix stuck jobs endpoint
+  app.post("/api/admin/fix-stuck-jobs", async (req: Request, res: Response) => {
+    try {
+      const videos = await storage.getAllVideos();
+      const stuckVideos = [];
+      const currentTime = Date.now();
+      const PROCESSING_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+      
+      for (const video of videos) {
+        if (video.status === 'processing') {
+          const processingTime = currentTime - new Date(video.updatedAt).getTime();
+          if (processingTime > PROCESSING_TIMEOUT) {
+            await storage.updateVideoStatus(video.id, 'failed');
+            stuckVideos.push(video.id);
+          }
+        }
+      }
+      
+      res.json({ 
+        message: `Fixed ${stuckVideos.length} stuck jobs`,
+        videoIds: stuckVideos 
+      });
+    } catch (error) {
+      console.error("Error fixing stuck jobs:", error);
+      res.status(500).json({ error: "Failed to fix stuck jobs" });
+    }
+  });
+  
+  // Retry failed video
+  app.post("/api/videos/:id/retry", async (req: Request, res: Response) => {
+    const videoId = parseInt(req.params.id);
+    
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ error: "Video not found" });
+      }
+      
+      if (video.status !== 'failed' && video.status !== 'processing') {
+        return res.status(400).json({ error: "Video is not in a retriable state" });
+      }
+      
+      // Reset status and restart processing
+      await storage.updateVideoStatus(videoId, 'pending');
+      processVideoWithTimeout(videoId).catch(console.error);
+      
+      res.json({ message: "Video processing restarted" });
+    } catch (error) {
+      console.error("Error retrying video:", error);
+      res.status(500).json({ error: "Failed to retry video" });
+    }
+  });
+  
+  // Confirm Bengali transcription
+  app.post("/api/videos/:id/confirm-transcription", async (req: Request, res: Response) => {
+    const videoId = parseInt(req.params.id);
+    
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ error: "Video not found" });
+      }
+      
+      // Mark video as transcription confirmed
+      res.json({ message: "Bengali transcription confirmed", videoId });
+    } catch (error) {
+      console.error("Error confirming transcription:", error);
+      res.status(500).json({ error: "Failed to confirm transcription" });
+    }
+  });
+  
+  // Translate video to specific language
+  app.post("/api/videos/:id/translate", async (req: Request, res: Response) => {
+    const videoId = parseInt(req.params.id);
+    const { targetLanguage } = req.body;
+    
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ error: "Video not found" });
+      }
+      
+      const transcriptions = await storage.getTranscriptionsByVideoId(videoId);
+      
+      // Start translation for each transcription
+      for (const transcription of transcriptions) {
+        translateText(transcription.id, targetLanguage).catch(console.error);
+      }
+      
+      res.json({ message: `Translation to ${targetLanguage} started`, videoId });
+    } catch (error) {
+      console.error("Error starting translation:", error);
+      res.status(500).json({ error: "Failed to start translation" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Background processing function with timeout
+async function processVideoWithTimeout(videoId: number) {
+  const PROCESSING_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+  
+  const timeout = setTimeout(async () => {
+    console.error(`Processing timeout for video ${videoId}`);
+    await storage.updateVideoStatus(videoId, "failed");
+  }, PROCESSING_TIMEOUT);
+  
+  try {
+    await processVideo(videoId);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // Background processing function

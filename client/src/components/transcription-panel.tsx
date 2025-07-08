@@ -5,10 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, Save, Edit } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Mic, Save, Edit, Check, X, Languages } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Transcription } from "@shared/schema";
+import type { Transcription, Translation } from "@shared/schema";
 
 interface TranscriptionPanelProps {
   videoId: string;

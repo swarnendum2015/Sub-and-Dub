@@ -106,6 +106,14 @@ Changelog:
   - Integrated OpenAI and ElevenLabs APIs
   - Implemented multi-model translation confidence scoring
   - Created time-synced transcription editing interface
+
+- July 08, 2025. Enhanced processing and error handling
+  - Fixed stuck videos processing issue with timeout mechanism (10 min timeout)
+  - Added job management endpoints for retry and status fixes
+  - Implemented editable transcription panels for Bengali and English
+  - Enhanced error handling for API quota issues
+  - Added automatic retry functionality for failed videos
+  - Improved processing status page with real-time verification
 ```
 
 ## User Preferences

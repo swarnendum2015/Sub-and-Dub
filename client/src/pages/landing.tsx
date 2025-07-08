@@ -184,10 +184,20 @@ export default function LandingPage() {
                       setLocation(`/processing/${video.id}`);
                     } else if (video.status === 'processing') {
                       setLocation(`/processing/${video.id}`);
+                    } else if (video.status === 'failed') {
+                      toast({
+                        title: "Video processing failed",
+                        description: "Click to retry processing this video.",
+                        variant: "destructive",
+                      });
+                      // Retry the failed video
+                      fetch(`/api/videos/${video.id}/retry`, { method: 'POST' })
+                        .then(() => setLocation(`/processing/${video.id}`))
+                        .catch(console.error);
                     } else {
                       toast({
                         title: "Video not ready",
-                        description: "This video is still being uploaded or has failed.",
+                        description: "This video is still being uploaded.",
                         variant: "destructive",
                       });
                     }

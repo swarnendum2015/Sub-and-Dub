@@ -270,7 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Confirm Bengali transcription
+  // Confirm Bengali transcription and translate to English only
   app.post("/api/videos/:id/confirm-transcription", async (req: Request, res: Response) => {
     const videoId = parseInt(req.params.id);
     
@@ -280,8 +280,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Video not found" });
       }
       
-      // Mark video as transcription confirmed
-      res.json({ message: "Bengali transcription confirmed", videoId });
+      const transcriptions = await storage.getTranscriptionsByVideoId(videoId);
+      
+      // Start English translation only after confirmation
+      console.log(`Starting English translation after Bengali confirmation for video ${videoId}`);
+      for (const transcription of transcriptions) {
+        try {
+          console.log(`Starting English translation for transcription ${transcription.id}`);
+          await translateText(transcription.id, "en");
+          console.log(`English translation completed for transcription ${transcription.id}`);
+        } catch (error) {
+          console.error(`Error translating transcription ${transcription.id}:`, error);
+        }
+      }
+      
+      res.json({ message: "Bengali transcription confirmed and English translation started", videoId });
     } catch (error) {
       console.error("Error confirming transcription:", error);
       res.status(500).json({ error: "Failed to confirm transcription" });
@@ -339,37 +352,14 @@ async function processVideo(videoId: number) {
     console.log(`Starting video processing for ID: ${videoId}`);
     await storage.updateVideoStatus(videoId, "processing");
     
-    // Transcribe video
-    console.log(`Starting transcription for video ${videoId}`);
+    // Transcribe video (Bengali only)
+    console.log(`Starting Bengali transcription for video ${videoId}`);
     const transcriptions = await transcribeVideo(videoId);
-    console.log(`Transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
+    console.log(`Bengali transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
     
-    // Generate translations for each transcription (focus on English first)
-    if (transcriptions && transcriptions.length > 0) {
-      for (const transcription of transcriptions) {
-      try {
-        console.log(`Starting English translation for transcription ${transcription.id}`);
-        const englishTranslation = await translateText(transcription.id, "en");
-        console.log(`English translation completed for transcription ${transcription.id}`);
-        
-        // Generate other language translations
-        const otherLanguages = ["hi", "ta", "te", "ml"]; // Hindi, Tamil, Telugu, Malayalam
-        for (const lang of otherLanguages) {
-          try {
-            console.log(`Starting ${lang} translation for transcription ${transcription.id}`);
-            await translateText(transcription.id, lang);
-            console.log(`${lang} translation completed for transcription ${transcription.id}`);
-          } catch (error) {
-            console.error(`Error translating to ${lang} for transcription ${transcription.id}:`, error);
-          }
-        }
-      } catch (error) {
-        console.error(`Error translating transcription ${transcription.id}:`, error);
-      }
-    }
-    } else {
-      console.error(`No transcriptions found for video ${videoId}`);
-    }
+    // DO NOT generate translations automatically
+    // Translations will only happen after user confirms Bengali transcription
+    console.log(`Video transcription completed. Waiting for user confirmation before translation.`);
     
     await storage.updateVideoStatus(videoId, "completed");
     console.log(`Video processing completed for ID: ${videoId}`);

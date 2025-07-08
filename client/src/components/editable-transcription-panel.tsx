@@ -38,11 +38,34 @@ export function EditableTranscriptionPanel({
     refetchInterval: bengaliConfirmed ? false : 5000,
   });
   
-  // Fetch translations for each transcription
-  const translationQueries = transcriptions.map((t: Transcription) => ({
-    queryKey: [`/api/transcriptions/${t.id}/translations`],
-    enabled: bengaliConfirmed && !!t.id,
-  }));
+  // Fetch all translations at once
+  const { data: allTranslations = {}, isLoading: translationsLoading } = useQuery({
+    queryKey: [`/api/videos/${videoId}/all-translations`],
+    queryFn: async () => {
+      if (!bengaliConfirmed || transcriptions.length === 0) return {};
+      
+      const translationMap: Record<number, Translation[]> = {};
+      
+      // Fetch translations for all transcriptions
+      await Promise.all(
+        transcriptions.map(async (t: Transcription) => {
+          try {
+            const res = await fetch(`/api/transcriptions/${t.id}/translations`);
+            if (res.ok) {
+              const translations = await res.json();
+              translationMap[t.id] = translations;
+            }
+          } catch (error) {
+            console.error(`Error fetching translations for transcription ${t.id}:`, error);
+          }
+        })
+      );
+      
+      return translationMap;
+    },
+    enabled: bengaliConfirmed && transcriptions.length > 0,
+    refetchInterval: bengaliConfirmed ? 5000 : false,
+  });
   
   // Update transcription mutation
   const updateTranscriptionMutation = useMutation({
@@ -73,10 +96,8 @@ export function EditableTranscriptionPanel({
       return apiRequest('PATCH', `/api/translations/${id}`, { text });
     },
     onSuccess: (_, variables) => {
-      // Invalidate the specific translation query
-      transcriptions.forEach((t: Transcription) => {
-        queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${t.id}/translations`] });
-      });
+      // Invalidate translations query
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
       toast({
         title: "Translation updated",
         description: "Your changes have been saved successfully.",
@@ -124,10 +145,8 @@ export function EditableTranscriptionPanel({
         title: "Translation started",
         description: `Translating to ${getLanguageName(variables.language)}...`,
       });
-      // Invalidate all translation queries
-      transcriptions.forEach((t: Transcription) => {
-        queryClient.invalidateQueries({ queryKey: [`/api/transcriptions/${t.id}/translations`] });
-      });
+      // Invalidate all translations query
+      queryClient.invalidateQueries({ queryKey: [`/api/videos/${videoId}/all-translations`] });
     },
     onError: (error) => {
       toast({
@@ -193,11 +212,7 @@ export function EditableTranscriptionPanel({
   
   // Get translations for current language
   const getTranslationsForLanguage = (transcriptionId: number) => {
-    const { data: translations = [] } = useQuery({
-      queryKey: [`/api/transcriptions/${transcriptionId}/translations`],
-      enabled: bengaliConfirmed && currentLanguage !== 'bn',
-    });
-    
+    const translations = allTranslations[transcriptionId] || [];
     return translations.find((t: Translation) => t.targetLanguage === currentLanguage);
   };
   

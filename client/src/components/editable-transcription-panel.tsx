@@ -264,10 +264,17 @@ export function EditableTranscriptionPanel({
   const getTranslationsForLanguage = (transcriptionId: number) => {
     const translations = allTranslations[transcriptionId] || [];
     const translation = translations.find((t: Translation) => t.targetLanguage === currentLanguage);
-    // Clear any cached Bengali text from translations
-    if (translation && currentLanguage !== 'bn') {
-      return translation;
+    
+    // Debug logging
+    if (currentLanguage === 'en' && translation) {
+      console.log('English translation found:', {
+        id: translation.id,
+        targetLanguage: translation.targetLanguage,
+        translatedText: translation.translatedText,
+        transcriptionId: transcriptionId
+      });
     }
+    
     return translation;
   };
   
@@ -590,7 +597,7 @@ export function EditableTranscriptionPanel({
                   }`}>
                     {currentLanguage === 'bn' 
                       ? transcription.text 
-                      : (displayItem as any)?.translatedText || 'Translation not available'}
+                      : translation?.translatedText || 'Translation not available'}
                   </p>
                 )}
               </Card>

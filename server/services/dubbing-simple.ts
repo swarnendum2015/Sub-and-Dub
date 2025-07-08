@@ -7,6 +7,9 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_
 export async function generateDubbingSimple(dubbingJobId: number) {
   const dubbingJob = await storage.getDubbingJob(dubbingJobId);
   
+  // Get voice ID from global map
+  const voiceId = global.dubbingVoiceMap?.get(dubbingJobId) || "21m00Tcm4TlvDq8ikWAM";
+  
   if (!dubbingJob) {
     throw new Error("Dubbing job not found");
   }
@@ -57,8 +60,8 @@ export async function generateDubbingSimple(dubbingJobId: number) {
   }
 }
 
-async function createSimpleDubbing(translations: any[], targetLanguage: string) {
-  console.log(`Creating TTS dubbing for ${targetLanguage} with ${translations.length} segments`);
+async function createSimpleDubbing(translations: any[], targetLanguage: string, voiceId?: string) {
+  console.log(`Creating TTS dubbing for ${targetLanguage} with ${translations.length} segments, voice: ${voiceId || 'default'}`);
   
   if (!ELEVENLABS_API_KEY) {
     // Use demo dubbing if no API key
@@ -73,8 +76,8 @@ async function createSimpleDubbing(translations: any[], targetLanguage: string) 
     // Combine all translations into a single text with pauses
     const fullText = translations.map(t => t.text).join(" ... ");
     
-    // Use ElevenLabs text-to-speech API
-    const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel voice (multilingual)
+    // Use ElevenLabs text-to-speech API with selected voice
+    const selectedVoiceId = voiceId || "21m00Tcm4TlvDq8ikWAM"; // Default to Rachel voice
     
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: "POST",

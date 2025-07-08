@@ -14,6 +14,13 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Transcription, Translation } from "@shared/schema";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface EditableTranscriptionPanelProps {
   videoId: string;
@@ -33,6 +40,7 @@ export function EditableTranscriptionPanel({
   const [bengaliConfirmed, setBengaliConfirmed] = useState(false);
   const [translatingLanguages, setTranslatingLanguages] = useState<Set<string>>(new Set());
   const [dubbingLanguages, setDubbingLanguages] = useState<Set<string>>(new Set());
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>("21m00Tcm4TlvDq8ikWAM"); // Default Rachel voice
   
   // Fetch transcriptions
   const { data: transcriptions = [], isLoading: transcriptionsLoading } = useQuery({
@@ -175,8 +183,8 @@ export function EditableTranscriptionPanel({
   
   // Trigger dubbing mutation
   const triggerDubbingMutation = useMutation({
-    mutationFn: async ({ language }: { language: string }) => {
-      return apiRequest('POST', `/api/videos/${videoId}/dubbing`, { language });
+    mutationFn: async ({ language, voiceId }: { language: string; voiceId?: string }) => {
+      return apiRequest('POST', `/api/videos/${videoId}/dubbing`, { language, voiceId });
     },
     onMutate: (variables) => {
       setDubbingLanguages(prev => new Set([...prev, variables.language]));
@@ -434,19 +442,36 @@ export function EditableTranscriptionPanel({
               
               {/* Dubbing Status */}
               {hasTranslations && !dubbingJob && !isDubbing && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">
-                    Generate audio dubbing in {getLanguageName(currentLanguage)}
-                  </span>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => triggerDubbingMutation.mutate({ language: currentLanguage })}
-                    disabled={triggerDubbingMutation.isPending}
-                  >
-                    <FileAudio className="w-4 h-4 mr-2" />
-                    Generate Dubbing
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-700">
+                      Generate audio dubbing in {getLanguageName(currentLanguage)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end space-x-2">
+                    <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select voice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</SelectItem>
+                        <SelectItem value="EXAVITQu4vr4xnSDxMaL">Bella (Female)</SelectItem>
+                        <SelectItem value="MF3mGyEYCl7XYWbV9V6O">Elli (Female)</SelectItem>
+                        <SelectItem value="pNInz6obpgDQGcFmaJgB">Adam (Male)</SelectItem>
+                        <SelectItem value="VR6AewLTigWG4xSOukaG">Arnold (Male)</SelectItem>
+                        <SelectItem value="onwK4e84wInTEgeA8qR7">Daniel (Male)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => triggerDubbingMutation.mutate({ language: currentLanguage, voiceId: selectedVoiceId })}
+                      disabled={triggerDubbingMutation.isPending}
+                    >
+                      <FileAudio className="w-4 h-4 mr-2" />
+                      Generate Dubbing
+                    </Button>
+                  </div>
                 </div>
               )}
               
@@ -592,13 +617,20 @@ export function EditableTranscriptionPanel({
                     </div>
                   </div>
                 ) : (
-                  <p className={`text-sm ${
-                    isCurrentSegment ? "text-slate-900 font-medium" : "text-slate-700"
-                  }`}>
-                    {currentLanguage === 'bn' 
-                      ? transcription.text 
-                      : translation?.translatedText || 'Translation not available'}
-                  </p>
+                  <div>
+                    <p className={`text-sm ${
+                      isCurrentSegment ? "text-slate-900 font-medium" : "text-slate-700"
+                    }`}>
+                      {currentLanguage === 'bn' 
+                        ? transcription.text 
+                        : translation?.translatedText || 'Translation not available'}
+                    </p>
+                    {currentLanguage !== 'bn' && translation && (
+                      <p className="text-xs text-slate-500 mt-1 italic">
+                        Bengali: {transcription.text}
+                      </p>
+                    )}
+                  </div>
                 )}
               </Card>
             );

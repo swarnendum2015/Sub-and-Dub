@@ -188,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate dubbing for a video
   app.post("/api/videos/:id/dubbing", async (req, res) => {
     try {
-      const { language } = req.body;
+      const { language, voiceId } = req.body;
       if (!language) {
         return res.status(400).json({ message: "Language is required" });
       }
@@ -198,6 +198,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         language,
         status: "pending",
       });
+
+      // Store voiceId in global map for the dubbing job (temporary solution)
+      const dubbingVoiceMap = global.dubbingVoiceMap || new Map();
+      dubbingVoiceMap.set(dubbingJob.id, voiceId || "21m00Tcm4TlvDq8ikWAM");
+      global.dubbingVoiceMap = dubbingVoiceMap;
 
       // Start background dubbing process
       generateDubbingSimple(dubbingJob.id);

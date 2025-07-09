@@ -220,6 +220,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete transcription
+  app.delete("/api/transcriptions/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid transcription ID" });
+      }
+      
+      await storage.deleteTranscription(id);
+      res.json({ message: "Transcription deleted successfully" });
+    } catch (error) {
+      console.error("Failed to delete transcription:", error);
+      res.status(500).json({ message: "Failed to delete transcription", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Get translations for a transcription
   app.get("/api/transcriptions/:id/translations", async (req, res) => {
     try {

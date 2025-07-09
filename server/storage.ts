@@ -28,6 +28,7 @@ export interface IStorage {
   createTranscription(transcription: InsertTranscription): Promise<Transcription>;
   getTranscriptionsByVideoId(videoId: number): Promise<Transcription[]>;
   updateTranscription(id: number, text: string): Promise<void>;
+  deleteTranscription(id: number): Promise<void>;
   
   // Translation operations
   createTranslation(translation: InsertTranslation): Promise<Translation>;
@@ -85,6 +86,13 @@ export class DatabaseStorage implements IStorage {
 
   async updateTranscription(id: number, text: string): Promise<void> {
     await db.update(transcriptions).set({ text }).where(eq(transcriptions.id, id));
+  }
+
+  async deleteTranscription(id: number): Promise<void> {
+    // First delete all associated translations
+    await db.delete(translations).where(eq(translations.transcriptionId, id));
+    // Then delete the transcription
+    await db.delete(transcriptions).where(eq(transcriptions.id, id));
   }
 
   async createTranslation(insertTranslation: InsertTranslation): Promise<Translation> {
@@ -205,6 +213,16 @@ export class MemStorage implements IStorage {
       transcription.text = text;
       this.transcriptions.set(id, transcription);
     }
+  }
+
+  async deleteTranscription(id: number): Promise<void> {
+    // First delete all associated translations
+    const translationsToDelete = Array.from(this.translations.values())
+      .filter(t => t.transcriptionId === id);
+    translationsToDelete.forEach(t => this.translations.delete(t.id));
+    
+    // Then delete the transcription
+    this.transcriptions.delete(id);
   }
 
   async createTranslation(insertTranslation: InsertTranslation): Promise<Translation> {

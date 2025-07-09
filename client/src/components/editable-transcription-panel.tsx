@@ -20,7 +20,8 @@ import {
   X,
   Mic,
   Play,
-  Languages
+  Languages,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Transcription, Translation } from "@shared/schema";
@@ -99,7 +100,6 @@ export function EditableTranscriptionPanel({
       const response = await fetch(`/api/videos/${videoId}`);
       if (!response.ok) throw new Error('Failed to fetch video');
       const data = await response.json();
-      console.log('Video data fetched:', data);
       return data;
     },
     enabled: !!videoId,
@@ -147,9 +147,9 @@ export function EditableTranscriptionPanel({
   const bengaliConfirmed = video?.bengaliConfirmed;
   const currentSegment = getCurrentSegment();
   
-  // Debug logging
-  console.log('Video data:', video);
-  console.log('Bengali confirmed status:', bengaliConfirmed);
+  // Debug logging (remove console logs to prevent performance issues)
+  // console.log('Video data:', video);
+  // console.log('Bengali confirmed status:', bengaliConfirmed);
 
   // Mutations
   const confirmBengaliMutation = useMutation({
@@ -203,6 +203,33 @@ export function EditableTranscriptionPanel({
       queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'transcriptions'] });
       setEditingId(null);
       toast({ title: "Translation updated successfully" });
+    },
+  });
+
+  const deleteTranscriptionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/transcriptions/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete transcription');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'transcriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
+      toast({
+        title: "Segment deleted",
+        description: "Transcription segment has been removed",
+      });
+    },
+    onError: (error) => {
+      console.error('Failed to delete transcription:', error);
+      toast({
+        title: "Delete failed",
+        description: "Could not delete transcription segment",
+        variant: "destructive",
+      });
     },
   });
 
@@ -366,7 +393,7 @@ export function EditableTranscriptionPanel({
             <TabsContent key={lang} value={lang} className="mt-4">
               {(() => {
                 if (lang === 'bn') {
-                  console.log('Bengali tab - confirmed status:', bengaliConfirmed);
+                  // console.log('Bengali tab - confirmed status:', bengaliConfirmed);
                   if (!bengaliConfirmed) {
                     return (
                       <div className="space-y-3">
@@ -748,6 +775,21 @@ export function EditableTranscriptionPanel({
                           title="Edit text"
                         >
                           <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Are you sure you want to delete this subtitle segment?')) {
+                              deleteTranscriptionMutation.mutate(transcription.id);
+                            }
+                          }}
+                          className="h-6 px-2 hover:bg-red-100 hover:text-red-700"
+                          disabled={deleteTranscriptionMutation.isPending}
+                          title="Delete segment"
+                        >
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     )}

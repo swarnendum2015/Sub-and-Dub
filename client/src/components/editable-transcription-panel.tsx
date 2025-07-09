@@ -530,13 +530,7 @@ export function EditableTranscriptionPanel({
             </Badge>
           </div>
           
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Audio dubbing processes the original video audio directly through ElevenLabs Dubbing Studio. 
-              This is independent of text translations and creates authentic dubbed audio with natural timing.
-            </AlertDescription>
-          </Alert>
+          
           
           {(() => {
             const dubbingJob = dubbingJobs.find((job: any) => job.language === currentLanguage);

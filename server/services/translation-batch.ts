@@ -45,6 +45,35 @@ interface TranslationSegment {
   text: string;
   speakerId?: string;
   speakerName?: string;
+  originalText?: string;
+}
+
+// Calculate translation confidence based on quality metrics
+function calculateTranslationConfidence(originalText: string, translatedText: string): number {
+  if (!originalText || !translatedText) return 0.1;
+  
+  // Base confidence
+  let confidence = 0.8;
+  
+  // Length ratio analysis (good translations maintain reasonable length ratios)
+  const lengthRatio = translatedText.length / originalText.length;
+  if (lengthRatio >= 0.5 && lengthRatio <= 2.0) confidence += 0.05;
+  
+  // Word count analysis
+  const originalWords = originalText.split(/\s+/).length;
+  const translatedWords = translatedText.split(/\s+/).length;
+  const wordRatio = translatedWords / originalWords;
+  if (wordRatio >= 0.7 && wordRatio <= 1.5) confidence += 0.05;
+  
+  // Structural analysis - presence of punctuation
+  const originalPunctuation = (originalText.match(/[।,;:!?]/g) || []).length;
+  const translatedPunctuation = (translatedText.match(/[।,;:!?]/g) || []).length;
+  if (Math.abs(originalPunctuation - translatedPunctuation) <= 1) confidence += 0.05;
+  
+  // Completeness check - not empty or placeholder
+  if (translatedText.trim().length > 3 && !translatedText.includes('...')) confidence += 0.05;
+  
+  return Math.min(confidence, 0.95); // Cap at 95%
 }
 
 export async function translateVideoBatch({ videoId, targetLanguage }: BatchTranslationRequest) {
@@ -81,7 +110,8 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
         endTime: transcription.endTime,
         text: transcription.text,
         speakerId: transcription.speakerId,
-        speakerName: transcription.speakerName
+        speakerName: transcription.speakerName,
+        originalText: transcription.text
       };
       
       // Add segment markers for batch processing
@@ -115,11 +145,13 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
       const existingTranslation = existingTranslations.find(t => t.targetLanguage === targetLanguage);
       
       if (existingTranslation) {
-        // Update existing translation
-        await storage.updateTranslation(existingTranslation.id, segment.translatedText);
+        // Update existing translation with new confidence
+        const newConfidence = calculateTranslationConfidence(segment.originalText || segment.text, segment.translatedText);
+        await storage.updateTranslation(existingTranslation.id, segment.translatedText, newConfidence);
         savedTranslations.push({
           ...existingTranslation,
-          text: segment.translatedText
+          text: segment.translatedText,
+          confidence: newConfidence
         });
       } else {
         // Create new translation
@@ -127,7 +159,7 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
           transcriptionId: segment.id,
           targetLanguage,
           text: segment.translatedText,
-          confidence: 0.95, // High confidence for batch translations
+          confidence: calculateTranslationConfidence(segment.originalText, segment.translatedText), // Calculate real confidence
           model: "gemini-batch"
         });
         savedTranslations.push(newTranslation);

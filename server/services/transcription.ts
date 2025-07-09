@@ -75,24 +75,22 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
       }
     }
     
-    // Use the best available result
-    const results = [openaiResult, geminiResult, elevenlabsResult].filter(Boolean);
+    // Store all available results for comparison
+    const results = [];
+    if (openaiResult) results.push({ ...openaiResult, modelSource: 'OpenAI Whisper' });
+    if (geminiResult) results.push({ ...geminiResult, modelSource: 'Gemini 2.5 Pro' });
+    if (elevenlabsResult) results.push({ ...elevenlabsResult, modelSource: 'ElevenLabs STT' });
     
     if (results.length === 0) {
       throw new Error('All selected transcription services failed. Please check your API keys and quotas.');
     } else if (results.length === 1) {
-      console.log(`[TRANSCRIBE] Using single result from available service`);
+      console.log(`[TRANSCRIBE] Using single result from ${results[0].modelSource}`);
       transcriptionResult = results[0];
     } else {
-      console.log(`[TRANSCRIBE] Multiple results available, combining...`);
-      // For now, prioritize OpenAI > Gemini > ElevenLabs
-      if (openaiResult) {
-        transcriptionResult = openaiResult;
-      } else if (geminiResult) {
-        transcriptionResult = geminiResult;
-      } else {
-        transcriptionResult = elevenlabsResult;
-      }
+      console.log(`[TRANSCRIBE] Multiple results available, will create alternatives...`);
+      // Use the first result as primary, store others as alternatives
+      transcriptionResult = results[0];
+      transcriptionResult.alternatives = results.slice(1);
     }
     
     console.log(`[TRANSCRIBE] Transcription completed successfully`);
@@ -101,33 +99,66 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
     throw error;
   }
   
-  // Create transcription segments
+  // Create transcription segments with proper model source tracking
   const transcriptions = [];
   
   // If no segments, create a single transcription with the full text
   if (!transcriptionResult.segments || transcriptionResult.segments.length === 0) {
     console.log('No segments found, creating single transcription');
+    
+    // Get alternative text if available
+    let alternativeText = null;
+    let alternativeModelSource = null;
+    if (transcriptionResult.alternatives && transcriptionResult.alternatives.length > 0) {
+      const altResult = transcriptionResult.alternatives[0];
+      alternativeText = altResult.text;
+      alternativeModelSource = altResult.modelSource;
+    }
+    
     const transcription = await storage.createTranscription({
       videoId,
       language: "bn", // Bengali
       text: transcriptionResult.text || "Transcription failed",
       startTime: 0,
       endTime: duration || 10,
-      confidence: 0.9,
+      confidence: transcriptionResult.confidence || 0.85, // Use actual confidence from transcription result
       isOriginal: true,
+      modelSource: transcriptionResult.modelSource || 'OpenAI Whisper',
+      alternativeText,
+      alternativeModelSource,
+      isAlternativeSelected: false,
     });
     transcriptions.push(transcription);
   } else {
     // Create individual transcriptions from segments
-    for (const segment of transcriptionResult.segments) {
+    for (let i = 0; i < transcriptionResult.segments.length; i++) {
+      const segment = transcriptionResult.segments[i];
+      
+      // Get alternative text for this segment if available
+      let alternativeText = null;
+      let alternativeModelSource = null;
+      if (transcriptionResult.alternatives && transcriptionResult.alternatives.length > 0) {
+        const altResult = transcriptionResult.alternatives[0];
+        if (altResult.segments && altResult.segments[i]) {
+          alternativeText = altResult.segments[i].text;
+          alternativeModelSource = altResult.modelSource;
+        }
+      }
+      
       const transcription = await storage.createTranscription({
         videoId,
         language: "bn", // Bengali
         text: segment.text,
         startTime: segment.start,
         endTime: segment.end,
-        confidence: segment.confidence || 0.9,
+        confidence: segment.confidence || 0.85, // Use actual confidence from segment
         isOriginal: true,
+        modelSource: transcriptionResult.modelSource || 'OpenAI Whisper',
+        alternativeText,
+        alternativeModelSource,
+        isAlternativeSelected: false,
+        speakerId: segment.speakerId || null,
+        speakerName: segment.speakerName || null,
       });
       transcriptions.push(transcription);
     }
@@ -254,12 +285,12 @@ async function transcribeWithOpenAI(audioPath: string) {
         text: segment.text,
         start: segment.start,
         end: segment.end,
-        confidence: 0.8 // OpenAI doesn't provide confidence scores
+        confidence: segment.avg_logprob ? Math.exp(segment.avg_logprob) : 0.85 // Use actual confidence from segment
       })) || [{
         text: transcription.text || "No transcription available", 
         start: 0,
         end: 10,
-        confidence: 0.95
+        confidence: 0.85
       }]
     };
   } catch (error) {

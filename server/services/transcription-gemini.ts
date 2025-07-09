@@ -74,11 +74,11 @@ Important:
     console.log('[GEMINI] Transcription completed');
     console.log('[GEMINI] Text length:', result.text?.length || 0);
     
-    // Add confidence scores
+    // Add confidence scores based on text quality metrics
     if (result.segments) {
       result.segments = result.segments.map((seg: any) => ({
         ...seg,
-        confidence: 0.85 // Gemini confidence estimate
+        confidence: calculateGeminiConfidence(seg.text) // Calculate confidence based on text quality
       }));
     }
     
@@ -90,6 +90,30 @@ Important:
 }
 
 // Combine results from multiple models for higher confidence
+// Calculate confidence based on text quality metrics for Gemini
+function calculateGeminiConfidence(text: string): number {
+  if (!text || text.trim().length === 0) return 0.1;
+  
+  // Base confidence
+  let confidence = 0.8;
+  
+  // Adjust based on text length (longer segments tend to be more reliable)
+  if (text.length > 50) confidence += 0.05;
+  if (text.length > 100) confidence += 0.05;
+  
+  // Adjust based on presence of proper words vs garbled text
+  const wordCount = text.split(/\s+/).length;
+  const avgWordLength = text.length / wordCount;
+  
+  // Reasonable word length indicates good transcription
+  if (avgWordLength >= 3 && avgWordLength <= 8) confidence += 0.05;
+  
+  // Presence of punctuation indicates structured text
+  if (/[।,;:!?]/.test(text)) confidence += 0.05;
+  
+  return Math.min(confidence, 0.95); // Cap at 95%
+}
+
 export function combineTranscriptionResults(openaiResult: any, geminiResult: any): any {
   console.log('[COMBINE] Combining transcription results from multiple models');
   

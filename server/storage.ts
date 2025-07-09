@@ -34,7 +34,7 @@ export interface IStorage {
   // Translation operations
   createTranslation(translation: InsertTranslation): Promise<Translation>;
   getTranslationsByTranscriptionId(transcriptionId: number): Promise<Translation[]>;
-  updateTranslation(id: number, text: string): Promise<void>;
+  updateTranslation(id: number, text: string, confidence?: number): Promise<void>;
   
   // Dubbing operations
   createDubbingJob(dubbingJob: InsertDubbingJob): Promise<DubbingJob>;
@@ -127,8 +127,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(translations).where(eq(translations.transcriptionId, transcriptionId));
   }
 
-  async updateTranslation(id: number, text: string): Promise<void> {
-    await db.update(translations).set({ translatedText: text }).where(eq(translations.id, id));
+  async updateTranslation(id: number, text: string, confidence?: number): Promise<void> {
+    const updateData: any = { translatedText: text };
+    if (confidence !== undefined) updateData.confidence = confidence;
+    await db.update(translations).set(updateData).where(eq(translations.id, id));
   }
 
   async createDubbingJob(insertDubbingJob: InsertDubbingJob): Promise<DubbingJob> {
@@ -286,10 +288,11 @@ export class MemStorage implements IStorage {
     return Array.from(this.translations.values()).filter(t => t.transcriptionId === transcriptionId);
   }
 
-  async updateTranslation(id: number, text: string): Promise<void> {
+  async updateTranslation(id: number, text: string, confidence?: number): Promise<void> {
     const translation = this.translations.get(id);
     if (translation) {
       translation.translatedText = text;
+      if (confidence !== undefined) translation.confidence = confidence;
       this.translations.set(id, translation);
     }
   }

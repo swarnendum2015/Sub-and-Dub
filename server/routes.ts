@@ -237,6 +237,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Switch between primary and alternative transcription
+  app.post("/api/transcriptions/:id/switch-alternative", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid transcription ID" });
+      }
+      
+      await storage.switchAlternativeTranscription(id);
+      res.json({ message: "Alternative transcription selected successfully" });
+    } catch (error) {
+      console.error("Failed to switch alternative transcription:", error);
+      res.status(500).json({ message: "Failed to switch alternative transcription", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   // Get translations for a transcription
   app.get("/api/transcriptions/:id/translations", async (req, res) => {
     try {

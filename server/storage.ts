@@ -29,6 +29,7 @@ export interface IStorage {
   getTranscriptionsByVideoId(videoId: number): Promise<Transcription[]>;
   updateTranscription(id: number, text: string): Promise<void>;
   deleteTranscription(id: number): Promise<void>;
+  switchAlternativeTranscription(id: number): Promise<void>;
   
   // Translation operations
   createTranslation(translation: InsertTranslation): Promise<Translation>;
@@ -93,6 +94,25 @@ export class DatabaseStorage implements IStorage {
     await db.delete(translations).where(eq(translations.transcriptionId, id));
     // Then delete the transcription
     await db.delete(transcriptions).where(eq(transcriptions.id, id));
+  }
+
+  async switchAlternativeTranscription(id: number): Promise<void> {
+    const [transcription] = await db.select().from(transcriptions).where(eq(transcriptions.id, id));
+    if (!transcription || !transcription.alternativeText) {
+      throw new Error("No alternative transcription available");
+    }
+    
+    // Swap primary and alternative text
+    const currentText = transcription.text;
+    const currentModelSource = transcription.modelSource;
+    
+    await db.update(transcriptions).set({
+      text: transcription.alternativeText,
+      modelSource: transcription.alternativeModelSource,
+      alternativeText: currentText,
+      alternativeModelSource: currentModelSource,
+      isAlternativeSelected: !transcription.isAlternativeSelected
+    }).where(eq(transcriptions.id, id));
   }
 
   async createTranslation(insertTranslation: InsertTranslation): Promise<Translation> {
@@ -197,6 +217,12 @@ export class MemStorage implements IStorage {
       videoId: insertTranscription.videoId || null,
       confidence: insertTranscription.confidence || null,
       isOriginal: insertTranscription.isOriginal || null,
+      speakerId: insertTranscription.speakerId || null,
+      speakerName: insertTranscription.speakerName || null,
+      modelSource: insertTranscription.modelSource || null,
+      alternativeText: insertTranscription.alternativeText || null,
+      alternativeModelSource: insertTranscription.alternativeModelSource || null,
+      isAlternativeSelected: insertTranscription.isAlternativeSelected || false,
       createdAt: new Date(),
     };
     this.transcriptions.set(transcription.id, transcription);
@@ -223,6 +249,25 @@ export class MemStorage implements IStorage {
     
     // Then delete the transcription
     this.transcriptions.delete(id);
+  }
+
+  async switchAlternativeTranscription(id: number): Promise<void> {
+    const transcription = this.transcriptions.get(id);
+    if (!transcription || !transcription.alternativeText) {
+      throw new Error("No alternative transcription available");
+    }
+    
+    // Swap primary and alternative text
+    const currentText = transcription.text;
+    const currentModelSource = transcription.modelSource;
+    
+    transcription.text = transcription.alternativeText;
+    transcription.modelSource = transcription.alternativeModelSource;
+    transcription.alternativeText = currentText;
+    transcription.alternativeModelSource = currentModelSource;
+    transcription.isAlternativeSelected = !transcription.isAlternativeSelected;
+    
+    this.transcriptions.set(id, transcription);
   }
 
   async createTranslation(insertTranslation: InsertTranslation): Promise<Translation> {

@@ -89,8 +89,21 @@ export default function ProcessingStatusPage() {
       // Verify transcriptions have actual content
       const hasContent = transcriptions.some((t: any) => t.text && t.text.length > 0);
       setCanProceed(hasContent);
+      
+      // Auto-redirect to workspace when ready for review
+      if (hasContent) {
+        const timer = setTimeout(() => {
+          toast({
+            title: "Ready for Review",
+            description: "Transcription completed! Redirecting to subtitle editing...",
+          });
+          setLocation(`/workspace/${videoId}`);
+        }, 2000); // 2 second delay to show completion status
+        
+        return () => clearTimeout(timer);
+      }
     }
-  }, [video, transcriptions]);
+  }, [video, transcriptions, videoId, setLocation, toast]);
   
   const getElapsedTime = () => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);

@@ -27,6 +27,10 @@ export const transcriptions = pgTable("transcriptions", {
   isOriginal: boolean("is_original").default(false),
   speakerId: integer("speaker_id"), // For multi-speaker support
   speakerName: text("speaker_name"), // Speaker identification
+  modelSource: text("model_source"), // Which AI model generated this transcription
+  alternativeText: text("alternative_text"), // Alternative transcription from different model
+  alternativeModelSource: text("alternative_model_source"), // Source of alternative transcription
+  isAlternativeSelected: boolean("is_alternative_selected").default(false), // Whether user chose alternative
   createdAt: timestamp("created_at").defaultNow(),
 });
 

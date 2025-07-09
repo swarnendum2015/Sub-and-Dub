@@ -251,6 +251,29 @@ export function EditableTranscriptionPanel({
     },
   });
 
+  const switchAlternativeMutation = useMutation({
+    mutationFn: async (transcriptionId: number) => {
+      const response = await fetch(`/api/transcriptions/${transcriptionId}/switch-alternative`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error('Failed to switch alternative transcription');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId, 'transcriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/translations', videoId] });
+      toast({ title: "Alternative transcription selected" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Switch failed",
+        description: "Could not switch to alternative transcription",
+        variant: "destructive",
+      });
+    },
+  });
+
   const translateMutation = useMutation({
     mutationFn: async (targetLanguage: string) => {
       const response = await fetch(`/api/videos/${videoId}/translate`, {
@@ -738,6 +761,12 @@ export function EditableTranscriptionPanel({
                         {Math.round(displayItem.confidence * 100)}%
                       </Badge>
                     )}
+                    {/* Model source indicator */}
+                    {currentLanguage === 'bn' && transcription.modelSource && (
+                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                        {transcription.modelSource}
+                      </Badge>
+                    )}
                     {/* Speaker identification */}
                     {currentLanguage === 'bn' && transcription.speakerId && (
                       <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
@@ -834,6 +863,38 @@ export function EditableTranscriptionPanel({
                         ? transcription.text 
                         : (translation?.translatedText || translation?.text || 'Translation not available')}
                     </p>
+                    
+                    {/* Alternative transcription display for Bengali */}
+                    {currentLanguage === 'bn' && transcription.alternativeText && transcription.alternativeText !== transcription.text && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-amber-800">
+                            Alternative ({transcription.alternativeModelSource || 'Different Model'}):
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              switchAlternativeMutation.mutate(transcription.id);
+                            }}
+                            disabled={switchAlternativeMutation.isPending}
+                            className="h-6 px-2 text-amber-700 hover:bg-amber-100"
+                            title="Use this alternative text"
+                          >
+                            {switchAlternativeMutation.isPending ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              "Use This"
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-sm text-amber-900">
+                          {transcription.alternativeText}
+                        </p>
+                      </div>
+                    )}
+                    
                     {currentLanguage !== 'bn' && translation && (
                       <p className="text-xs text-slate-500 mt-1 italic">
                         Bengali: {transcription.text}

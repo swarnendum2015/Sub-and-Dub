@@ -2,6 +2,47 @@ import { storage } from "../storage";
 
 // Fallback if Google GenAI is not available, use OpenAI
 async function translateBatchWithOpenAI(batchText: string, targetLanguage: string): Promise<string> {
+  const languageMap: { [key: string]: string } = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'ml': 'Malayalam'
+  };
+  
+  const targetLangName = languageMap[targetLanguage] || targetLanguage;
+  
+  const prompt = `You are a premium Translation and Subtitling expert working for a world-class content studio. Your expertise includes contextual translation, cultural adaptation, and professional subtitling standards.
+
+TRANSLATION BRIEF:
+- Source Language: Bengali
+- Target Language: ${targetLangName}
+- Content Type: Video subtitles/dialogue
+- Quality Standard: Broadcast/Cinema level
+
+PROFESSIONAL SUBTITLING STANDARDS:
+1. CONTEXTUAL TRANSLATION: Understand the video context, emotions, and cultural nuances rather than literal word-for-word translation
+2. PRONOUN HANDLING: Properly identify and translate pronouns based on context, gender, and cultural appropriateness
+3. SUBTITLE BEST PRACTICES:
+   - Keep translations concise and readable (max 2 lines when possible)
+   - Maintain natural speech patterns and rhythm
+   - Preserve emotional tone and speaker intent
+   - Use culturally appropriate expressions and idioms
+4. TECHNICAL REQUIREMENTS:
+   - Maintain exact SEGMENT_X: format
+   - Translate only text after the colon
+   - Ensure subtitle timing compatibility
+5. QUALITY ASSURANCE:
+   - Avoid common subtitling errors (redundancy, awkward phrasing)
+   - Ensure grammatical accuracy and proper punctuation
+   - Maintain consistency in terminology and character names
+   - Adapt cultural references appropriately
+
+Bengali text to translate:
+${batchText}
+
+Translate to ${targetLangName}:`;
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -12,7 +53,7 @@ async function translateBatchWithOpenAI(batchText: string, targetLanguage: strin
       model: 'gpt-4',
       messages: [{
         role: 'user',
-        content: `Translate the following Bengali text segments to ${targetLanguage}. Keep the SEGMENT_X: format intact.\n\n${batchText}`
+        content: prompt
       }],
       temperature: 0.3
     })
@@ -52,28 +93,67 @@ interface TranslationSegment {
 function calculateTranslationConfidence(originalText: string, translatedText: string): number {
   if (!originalText || !translatedText) return 0.1;
   
-  // Base confidence
-  let confidence = 0.8;
+  // Professional translation confidence scoring based on subtitling standards
+  const originalWords = originalText.trim().split(/\s+/).length;
+  const translatedWords = translatedText.trim().split(/\s+/).length;
+  const lengthRatio = translatedWords / originalWords;
   
-  // Length ratio analysis (good translations maintain reasonable length ratios)
-  const lengthRatio = translatedText.length / originalText.length;
-  if (lengthRatio >= 0.5 && lengthRatio <= 2.0) confidence += 0.05;
+  // Subtitle timing and readability metrics
+  const charsPerSecond = translatedText.length / 3; // Assume 3-second segment average
+  const idealCPS = 20; // Characters per second for readable subtitles
+  const readabilityScore = Math.min(1.0, idealCPS / Math.max(charsPerSecond, 10));
   
-  // Word count analysis
-  const originalWords = originalText.split(/\s+/).length;
-  const translatedWords = translatedText.split(/\s+/).length;
-  const wordRatio = translatedWords / originalWords;
-  if (wordRatio >= 0.7 && wordRatio <= 1.5) confidence += 0.05;
+  // Language-specific length expectations for Bengali translations
+  let optimalLengthRange = { min: 0.6, max: 1.8 };
   
-  // Structural analysis - presence of punctuation
-  const originalPunctuation = (originalText.match(/[।,;:!?]/g) || []).length;
-  const translatedPunctuation = (translatedText.match(/[।,;:!?]/g) || []).length;
-  if (Math.abs(originalPunctuation - translatedPunctuation) <= 1) confidence += 0.05;
+  let lengthScore = 1.0;
+  if (lengthRatio < optimalLengthRange.min || lengthRatio > optimalLengthRange.max) {
+    lengthScore = 0.75; // Outside optimal range
+  } else if (lengthRatio < 0.8 || lengthRatio > 1.4) {
+    lengthScore = 0.9; // Slightly outside ideal
+  }
   
-  // Completeness check - not empty or placeholder
-  if (translatedText.trim().length > 3 && !translatedText.includes('...')) confidence += 0.05;
+  // Translation quality indicators
+  const qualityIndicators = {
+    hasPlaceholders: /\[.*\]|\(.*\)|{.*}/.test(translatedText),
+    hasErrorMarkers: /(unable|error|failed|cannot|न्हीं|नहीं)/i.test(translatedText),
+    hasRepeatedOriginal: translatedText.includes(originalText.substring(0, Math.min(10, originalText.length))),
+    hasIncompleteText: translatedText.length < 3 || translatedText.endsWith('...'),
+    hasProperPunctuation: /[.!?।]$/.test(translatedText.trim()),
+    hasNaturalFlow: !/\b(the the|a a|is is|and and)\b/i.test(translatedText)
+  };
   
-  return Math.min(confidence, 0.95); // Cap at 95%
+  let qualityScore = 1.0;
+  if (qualityIndicators.hasPlaceholders || qualityIndicators.hasErrorMarkers) {
+    qualityScore = 0.4;
+  } else if (qualityIndicators.hasRepeatedOriginal || qualityIndicators.hasIncompleteText) {
+    qualityScore = 0.6;
+  } else if (!qualityIndicators.hasProperPunctuation || !qualityIndicators.hasNaturalFlow) {
+    qualityScore = 0.85;
+  }
+  
+  // Context and complexity scoring
+  let complexityScore = 1.0;
+  if (originalWords <= 2) {
+    complexityScore = 0.95; // Very short phrases
+  } else if (originalWords <= 5) {
+    complexityScore = 0.92; // Short sentences
+  } else if (originalWords <= 10) {
+    complexityScore = 0.88; // Medium sentences
+  } else {
+    complexityScore = 0.85; // Long sentences
+  }
+  
+  // Cultural and contextual adaptation bonus
+  const hasCulturalAdaptation = /sir|madam|ji|saheb|bhai|didi/i.test(originalText) && 
+                               !/sir|madam|ji|saheb|bhai|didi/i.test(translatedText);
+  const culturalScore = hasCulturalAdaptation ? 1.05 : 1.0;
+  
+  // Final confidence calculation
+  const finalConfidence = complexityScore * lengthScore * qualityScore * readabilityScore * culturalScore;
+  
+  // Ensure confidence is within reasonable bounds for professional subtitling
+  return Math.max(0.65, Math.min(0.98, finalConfidence));
 }
 
 export async function translateVideoBatch({ videoId, targetLanguage }: BatchTranslationRequest) {
@@ -190,14 +270,33 @@ async function translateBatchWithGemini(batchText: string, targetLanguage: strin
   
   const targetLangName = languageMap[targetLanguage] || targetLanguage;
   
-  const prompt = `You are a professional translator specializing in Bengali to ${targetLangName} translation. 
+  const prompt = `You are a premium Translation and Subtitling expert working for a world-class content studio. Your expertise includes contextual translation, cultural adaptation, and professional subtitling standards.
+
+TRANSLATION BRIEF:
+- Source Language: Bengali
+- Target Language: ${targetLangName}
+- Content Type: Video subtitles/dialogue
+- Quality Standard: Broadcast/Cinema level
 
 Translate the following Bengali text segments to ${targetLangName}. Each segment is marked with SEGMENT_X: followed by the Bengali text.
 
-IMPORTANT INSTRUCTIONS:
-1. Maintain the exact same format with SEGMENT_X: markers
-2. Translate only the text after the colon, keep the segment markers unchanged
-3. Preserve the natural flow and context of the conversation
+PROFESSIONAL SUBTITLING STANDARDS:
+1. CONTEXTUAL TRANSLATION: Understand the video context, emotions, and cultural nuances rather than literal word-for-word translation
+2. PRONOUN HANDLING: Properly identify and translate pronouns based on context, gender, and cultural appropriateness
+3. SUBTITLE BEST PRACTICES:
+   - Keep translations concise and readable (max 2 lines when possible)
+   - Maintain natural speech patterns and rhythm
+   - Preserve emotional tone and speaker intent
+   - Use culturally appropriate expressions and idioms
+4. TECHNICAL REQUIREMENTS:
+   - Maintain exact SEGMENT_X: format
+   - Translate only text after the colon
+   - Ensure subtitle timing compatibility
+5. QUALITY ASSURANCE:
+   - Avoid common subtitling errors (redundancy, awkward phrasing)
+   - Ensure grammatical accuracy and proper punctuation
+   - Maintain consistency in terminology and character names
+   - Adapt cultural references appropriately
 4. Keep speaker names and technical terms appropriate for ${targetLangName}
 5. Maintain the same number of segments in your response
 

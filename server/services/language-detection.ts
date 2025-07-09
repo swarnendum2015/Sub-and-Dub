@@ -72,32 +72,44 @@ const SUPPORTED_LANGUAGES = {
 };
 
 export async function detectLanguageFromVideo(videoPath: string): Promise<LanguageDetectionResult> {
+  let audioPath: string | null = null;
+  
   try {
     console.log(`Starting language detection for video: ${videoPath}`);
     
     // Extract a short audio sample for analysis (first 30 seconds)
-    const audioPath = await extractAudioSample(videoPath);
+    audioPath = await extractAudioSample(videoPath);
     
-    // Use OpenAI Whisper for initial transcription and language detection
+    // Try OpenAI Whisper first
     const whisperResult = await detectWithWhisper(audioPath);
+    if (whisperResult) {
+      return whisperResult;
+    }
     
     // If OpenAI fails, try with Gemini as fallback
-    if (!whisperResult) {
-      const geminiResult = await detectWithGemini(audioPath);
-      return geminiResult || { language: 'en', confidence: 0.5, languageName: 'English' };
+    console.log('OpenAI failed, trying Gemini fallback...');
+    const geminiResult = await detectWithGemini(audioPath);
+    if (geminiResult) {
+      return geminiResult;
     }
     
-    // Clean up temporary audio file
-    if (fs.existsSync(audioPath)) {
-      fs.unlinkSync(audioPath);
-    }
-    
-    return whisperResult;
+    // If both fail, return default with lower confidence
+    console.log('Both OpenAI and Gemini failed, using default language detection');
+    return { language: 'en', confidence: 0.3, languageName: 'English' };
     
   } catch (error) {
     console.error('Language detection failed:', error);
     // Default to English with low confidence
     return { language: 'en', confidence: 0.3, languageName: 'English' };
+  } finally {
+    // Clean up temporary audio file
+    if (audioPath && fs.existsSync(audioPath)) {
+      try {
+        fs.unlinkSync(audioPath);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup audio file:', cleanupError);
+      }
+    }
   }
 }
 
@@ -152,8 +164,12 @@ async function detectWithWhisper(audioPath: string): Promise<LanguageDetectionRe
       languageName
     };
     
-  } catch (error) {
-    console.error('Whisper language detection failed:', error);
+  } catch (error: any) {
+    if (error.code === 'insufficient_quota') {
+      console.error('OpenAI quota exceeded for language detection');
+    } else {
+      console.error('Whisper language detection failed:', error);
+    }
     return null;
   }
 }
@@ -196,8 +212,12 @@ async function detectWithGemini(audioPath: string): Promise<LanguageDetectionRes
     
     return null;
     
-  } catch (error) {
-    console.error('Gemini language detection failed:', error);
+  } catch (error: any) {
+    if (error.status === 429) {
+      console.error('Gemini quota exceeded for language detection');
+    } else {
+      console.error('Gemini language detection failed:', error);
+    }
     return null;
   }
 }

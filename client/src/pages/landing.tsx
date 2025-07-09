@@ -3,18 +3,15 @@ import { useLocation } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { UploadZone } from "@/components/upload-zone";
-import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar, Settings, Palette, Download, FileAudio } from "lucide-react";
+import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedModels, setSelectedModels] = useState<string[]>(['openai', 'gemini']);
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -31,16 +28,6 @@ export default function LandingPage() {
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
-
-    // Validate that at least one model is selected
-    if (selectedModels.length === 0) {
-      toast({
-        title: "No model selected",
-        description: "Please select at least one transcription model",
-        variant: "destructive",
-      });
-      return;
-    }
 
     // Validate file type
     const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
@@ -69,7 +56,6 @@ export default function LandingPage() {
     try {
       const formData = new FormData();
       formData.append('video', file);
-      formData.append('models', JSON.stringify(selectedModels));
 
       const xhr = new XMLHttpRequest();
       
@@ -87,30 +73,11 @@ export default function LandingPage() {
           
           toast({
             title: "Upload successful",
-            description: "Starting video processing...",
+            description: "Starting video analysis...",
           });
           
-          // Start processing the video with selected models
-          try {
-            const processResponse = await fetch(`/api/videos/${videoId}/process`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ models: selectedModels })
-            });
-            
-            if (!processResponse.ok) {
-              throw new Error('Failed to start processing');
-            }
-            
-            // Navigate to processing status page
-            setLocation(`/processing/${videoId}`);
-          } catch (error) {
-            console.error('Processing error:', error);
-            // If processing fails, still navigate to workspace
-            setLocation(`/workspace/${videoId}`);
-          }
+          // Navigate to processing status page to show analysis progress
+          setLocation(`/processing/${videoId}`);
         } else {
           throw new Error(xhr.responseText);
         }
@@ -141,20 +108,11 @@ export default function LandingPage() {
   };
 
   const handleS3Upload = async (s3Url: string) => {
-    if (selectedModels.length === 0) {
-      toast({
-        title: "No model selected",
-        description: "Please select at least one transcription model",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const response = await fetch('/api/videos/upload-s3', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ s3Url, selectedModels }),
+        body: JSON.stringify({ s3Url }),
       });
       
       if (!response.ok) throw new Error('Failed to process S3 video');
@@ -173,20 +131,11 @@ export default function LandingPage() {
   };
 
   const handleYouTubeUpload = async (youtubeUrl: string) => {
-    if (selectedModels.length === 0) {
-      toast({
-        title: "No model selected",
-        description: "Please select at least one transcription model",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const response = await fetch('/api/videos/upload-youtube', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ youtubeUrl, selectedModels }),
+        body: JSON.stringify({ youtubeUrl }),
       });
       
       if (!response.ok) throw new Error('Failed to process YouTube video');
@@ -227,7 +176,7 @@ export default function LandingPage() {
             Upload Video
           </h2>
           <p className="text-slate-600">
-            Upload your Bengali video to start transcription and translation
+            Upload your video to start analysis, transcription, and translation
           </p>
         </div>
 
@@ -262,71 +211,7 @@ export default function LandingPage() {
           )}
         </div>
         
-        {/* Model Selection */}
-        {!isUploading && (
-          <div className="mt-8 p-6 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200">
-            <h3 className="text-base font-semibold text-slate-900 mb-4 flex items-center">
-              <Settings className="w-4 h-4 mr-2" />
-              Select Transcription Models
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
-                <Checkbox 
-                  id="openai" 
-                  checked={selectedModels.includes('openai')}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedModels([...selectedModels, 'openai']);
-                    } else {
-                      setSelectedModels(selectedModels.filter(m => m !== 'openai'));
-                    }
-                  }}
-                />
-                <Label htmlFor="openai" className="text-sm font-medium cursor-pointer flex-1">
-                  OpenAI Whisper
-                  <div className="text-xs text-slate-500 mt-1">Industry standard</div>
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
-                <Checkbox 
-                  id="gemini" 
-                  checked={selectedModels.includes('gemini')}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedModels([...selectedModels, 'gemini']);
-                    } else {
-                      setSelectedModels(selectedModels.filter(m => m !== 'gemini'));
-                    }
-                  }}
-                />
-                <Label htmlFor="gemini" className="text-sm font-medium cursor-pointer flex-1">
-                  Gemini 2.5 Pro
-                  <div className="text-xs text-slate-500 mt-1">Google's latest</div>
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
-                <Checkbox 
-                  id="elevenlabs" 
-                  checked={selectedModels.includes('elevenlabs')}
-                  onCheckedChange={(checked) => {
-                    if (checked) {
-                      setSelectedModels([...selectedModels, 'elevenlabs']);
-                    } else {
-                      setSelectedModels(selectedModels.filter(m => m !== 'elevenlabs'));
-                    }
-                  }}
-                />
-                <Label htmlFor="elevenlabs" className="text-sm font-medium cursor-pointer flex-1">
-                  ElevenLabs STT
-                  <div className="text-xs text-slate-500 mt-1">Voice specialist</div>
-                </Label>
-              </div>
-            </div>
-            {selectedModels.length === 0 && (
-              <p className="text-sm text-red-600 mt-2">Please select at least one model</p>
-            )}
-          </div>
-        )}
+
         
         {/* Existing Videos */}
         {sortedVideos.length > 0 && (
@@ -414,23 +299,7 @@ export default function LandingPage() {
               ))}
             </div>
             
-            {/* Model Selection Feedback */}
-            {selectedModels.length === 0 && (
-              <div className="flex items-center space-x-2 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <span className="text-sm text-amber-800 font-medium">Please select at least one transcription model</span>
-              </div>
-            )}
-            
-            {selectedModels.length > 0 && (
-              <div className="flex items-center space-x-2 mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <CheckCircle className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-blue-800 font-medium">
-                  {selectedModels.length} model{selectedModels.length > 1 ? 's' : ''} selected
-                  {selectedModels.length > 1 && " - You'll be able to compare results in the workspace"}
-                </span>
-              </div>
-            )}
+
           </div>
         )}
       </main>

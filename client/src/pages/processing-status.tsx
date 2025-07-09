@@ -84,7 +84,20 @@ export default function ProcessingStatusPage() {
   }, [videoError, transcriptionError, toast]);
   
   useEffect(() => {
-    // Check if we can proceed to workspace
+    // Handle analysis completion - redirect to service selection
+    if (video?.status === 'analyzed') {
+      const timer = setTimeout(() => {
+        toast({
+          title: "Analysis Complete",
+          description: "Video analyzed successfully! Please select your desired services.",
+        });
+        setLocation(`/select-services/${videoId}`);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+    
+    // Check if we can proceed to workspace (after services have been selected and processing is complete)
     if (video?.status === 'completed' && transcriptions && transcriptions.length > 0) {
       // Verify transcriptions have actual content
       const hasContent = transcriptions.some((t: any) => t.text && t.text.length > 0);
@@ -95,7 +108,7 @@ export default function ProcessingStatusPage() {
         const timer = setTimeout(() => {
           toast({
             title: "Ready for Review",
-            description: "Transcription completed! Redirecting to subtitle editing...",
+            description: "Processing completed! Redirecting to workspace...",
           });
           setLocation(`/workspace/${videoId}`);
         }, 2000); // 2 second delay to show completion status
@@ -122,7 +135,36 @@ export default function ProcessingStatusPage() {
       }
     ];
     
-    if (video?.status === 'processing') {
+    // Handle analyzing phase
+    if (video?.status === 'analyzing') {
+      steps.push({
+        id: 'analysis',
+        name: 'Video Analysis',
+        status: 'processing',
+        message: `Analyzing video and detecting source language... ${getElapsedTime()}`
+      });
+      
+      steps.push({
+        id: 'service-selection',
+        name: 'Service Selection',
+        status: 'pending',
+        message: 'Waiting for analysis to complete'
+      });
+    } else if (video?.status === 'analyzed') {
+      steps.push({
+        id: 'analysis',
+        name: 'Video Analysis',
+        status: 'completed',
+        message: `Source language detected: ${video.sourceLanguage || 'Unknown'}`
+      });
+      
+      steps.push({
+        id: 'service-selection',
+        name: 'Service Selection',
+        status: 'processing',
+        message: 'Ready to select transcription, translation, and dubbing services'
+      });
+    } else if (video?.status === 'processing') {
       if (hasTimedOut) {
         steps.push({
           id: 'transcription',

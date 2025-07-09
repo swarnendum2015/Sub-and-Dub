@@ -9,6 +9,7 @@ import { transcribeVideo } from "./services/transcription";
 import { translateText, retranslateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
+import { detectLanguageFromVideo, getSupportedLanguages } from "./services/language-detection";
 
 const upload = multer({
   dest: "uploads/",
@@ -27,21 +28,11 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Upload video
+  // Upload video and analyze
   app.post("/api/videos/upload", upload.single("video"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
-      }
-
-      // Parse selected models from request
-      let selectedModels = ['openai', 'gemini']; // Default to both
-      if (req.body.models) {
-        try {
-          selectedModels = JSON.parse(req.body.models);
-        } catch (e) {
-          console.log('Failed to parse models, using defaults');
-        }
       }
 
       const video = await storage.createVideo({
@@ -52,8 +43,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "uploaded",
       });
 
-      // Start background processing with selected models
-      processVideoWithTimeout(video.id, selectedModels).catch(console.error);
+      // Start background analysis (language detection only)
+      analyzeVideoWithTimeout(video.id).catch(console.error);
 
       res.json(video);
     } catch (error) {
@@ -573,7 +564,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get supported languages for dropdowns
+  app.get("/api/languages", async (req, res) => {
+    try {
+      const languages = getSupportedLanguages();
+      res.json(languages);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch supported languages", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Select services for analyzed video
+  app.post("/api/videos/:id/select-services", async (req, res) => {
+    try {
+      const videoId = parseInt(req.params.id);
+      const { services, models, targetLanguages, sourceLanguage } = req.body;
+      
+      if (!services || !Array.isArray(services)) {
+        return res.status(400).json({ message: "Services array is required" });
+      }
+      
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      
+      if (video.status !== "analyzed") {
+        return res.status(400).json({ message: "Video must be analyzed first" });
+      }
+      
+      // Save service selections
+      await storage.updateVideoServices(videoId, services, models || [], targetLanguages || []);
+      
+      // Update source language if provided
+      if (sourceLanguage && sourceLanguage !== video.sourceLanguage) {
+        await storage.updateVideoSourceLanguage(videoId, sourceLanguage, 1.0);
+      }
+      
+      // Start processing based on selected services
+      processVideoWithTimeout(videoId, models).catch(console.error);
+      
+      res.json({ message: "Service selection saved and processing started" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to select services", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
   return httpServer;
+}
+
+// Background analysis function with timeout
+async function analyzeVideoWithTimeout(videoId: number) {
+  const ANALYSIS_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  
+  const timeout = setTimeout(async () => {
+    console.error(`Analysis timeout for video ${videoId}`);
+    await storage.updateVideoStatus(videoId, "failed");
+  }, ANALYSIS_TIMEOUT);
+  
+  try {
+    await analyzeVideo(videoId);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Background analysis function
+async function analyzeVideo(videoId: number) {
+  try {
+    console.log(`[ANALYZE] Starting video analysis for ID: ${videoId}`);
+    await storage.updateVideoStatus(videoId, "analyzing");
+    
+    const video = await storage.getVideo(videoId);
+    if (!video) {
+      throw new Error(`Video ${videoId} not found`);
+    }
+    
+    // Detect source language
+    console.log(`[ANALYZE] Detecting language for video ${videoId}`);
+    const languageResult = await detectLanguageFromVideo(video.filePath);
+    
+    // Update video with detected language
+    await storage.updateVideoSourceLanguage(videoId, languageResult.language, languageResult.confidence);
+    
+    // Mark as analyzed
+    await storage.updateVideoStatus(videoId, "analyzed");
+    
+    console.log(`[ANALYZE] Analysis completed for video ${videoId}. Detected language: ${languageResult.languageName} (${languageResult.confidence})`);
+    
+  } catch (error) {
+    console.error(`[ANALYZE] Analysis error for video ${videoId}:`, error);
+    await storage.updateVideoStatus(videoId, "failed");
+    throw error;
+  }
 }
 
 // Background processing function with timeout

@@ -23,6 +23,8 @@ export interface IStorage {
   updateVideoStatus(id: number, status: string): Promise<void>;
   updateVideoDuration(id: number, duration: number): Promise<void>;
   updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void>;
+  updateVideoSourceLanguage(id: number, language: string, confidence: number): Promise<void>;
+  updateVideoServices(id: number, services: string[], models: string[], targetLanguages: string[]): Promise<void>;
 
   // Transcription operations
   createTranscription(transcription: InsertTranscription): Promise<Transcription>;
@@ -71,6 +73,21 @@ export class DatabaseStorage implements IStorage {
 
   async updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void> {
     await db.update(videos).set({ bengaliConfirmed: confirmed }).where(eq(videos.id, id));
+  }
+
+  async updateVideoSourceLanguage(id: number, language: string, confidence: number): Promise<void> {
+    await db.update(videos).set({ 
+      sourceLanguage: language,
+      sourceLanguageConfidence: confidence 
+    }).where(eq(videos.id, id));
+  }
+
+  async updateVideoServices(id: number, services: string[], models: string[], targetLanguages: string[]): Promise<void> {
+    await db.update(videos).set({
+      selectedServices: JSON.stringify(services),
+      selectedModels: JSON.stringify(models),
+      targetLanguages: JSON.stringify(targetLanguages)
+    }).where(eq(videos.id, id));
   }
 
   async createTranscription(insertTranscription: InsertTranscription): Promise<Transcription> {
@@ -174,6 +191,13 @@ export class MemStorage implements IStorage {
       id: this.currentVideoId++,
       duration: insertVideo.duration || null,
       status: insertVideo.status || "uploaded",
+      sourceLanguage: insertVideo.sourceLanguage || null,
+      sourceLanguageConfidence: insertVideo.sourceLanguageConfidence || null,
+      bengaliConfirmed: insertVideo.bengaliConfirmed || false,
+      speakerCount: insertVideo.speakerCount || 1,
+      selectedServices: insertVideo.selectedServices || null,
+      selectedModels: insertVideo.selectedModels || null,
+      targetLanguages: insertVideo.targetLanguages || null,
       createdAt: new Date(),
     };
     this.videos.set(video.id, video);
@@ -208,6 +232,25 @@ export class MemStorage implements IStorage {
     const video = this.videos.get(id);
     if (video) {
       video.duration = duration;
+      this.videos.set(id, video);
+    }
+  }
+
+  async updateVideoSourceLanguage(id: number, language: string, confidence: number): Promise<void> {
+    const video = this.videos.get(id);
+    if (video) {
+      video.sourceLanguage = language;
+      video.sourceLanguageConfidence = confidence;
+      this.videos.set(id, video);
+    }
+  }
+
+  async updateVideoServices(id: number, services: string[], models: string[], targetLanguages: string[]): Promise<void> {
+    const video = this.videos.get(id);
+    if (video) {
+      video.selectedServices = JSON.stringify(services);
+      video.selectedModels = JSON.stringify(models);
+      video.targetLanguages = JSON.stringify(targetLanguages);
       this.videos.set(id, video);
     }
   }

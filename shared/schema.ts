@@ -10,9 +10,14 @@ export const videos = pgTable("videos", {
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size").notNull(),
   duration: real("duration"),
-  status: text("status").notNull().default("uploaded"), // uploaded, processing, completed, failed
+  status: text("status").notNull().default("uploaded"), // uploaded, analyzing, analyzed, processing, completed, failed
+  sourceLanguage: text("source_language"), // Auto-detected source language
+  sourceLanguageConfidence: real("source_language_confidence"), // Confidence in language detection
   bengaliConfirmed: boolean("bengali_confirmed").default(false),
   speakerCount: integer("speaker_count").default(1), // Number of speakers detected
+  selectedServices: text("selected_services"), // JSON array: ["transcription", "translation", "dubbing"]
+  selectedModels: text("selected_models"), // JSON array: ["openai", "gemini", "elevenlabs"]
+  targetLanguages: text("target_languages"), // JSON array: ["en", "hi", "ta", "te", "ml"]
   createdAt: timestamp("created_at").defaultNow(),
 });
 

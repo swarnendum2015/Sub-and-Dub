@@ -23,6 +23,8 @@ interface ProcessingStep {
 }
 
 export function ProcessingScreen({ videoId, videoName, onRetry }: ProcessingScreenProps) {
+  const [startTime] = useState(Date.now());
+  const [hasTimedOut, setHasTimedOut] = useState(false);
   const [steps, setSteps] = useState<ProcessingStep[]>([
     {
       id: 'upload',
@@ -33,39 +35,60 @@ export function ProcessingScreen({ videoId, videoName, onRetry }: ProcessingScre
     },
     {
       id: 'transcription',
-      name: 'Audio Transcription',
-      description: 'Converting Bengali audio to text using AI',
+      name: 'Multi-Model Transcription',
+      description: 'Using OpenAI Whisper, Gemini 2.5 Pro, and ElevenLabs STT',
       icon: Mic,
       status: 'processing',
       progress: 0
     },
     {
-      id: 'translation',
-      name: 'Translation',
-      description: 'Translating to English, Hindi, Tamil, Telugu, Malayalam',
+      id: 'review',
+      name: 'Ready for Review',
+      description: 'Bengali transcription ready for manual confirmation',
       icon: Languages,
-      status: 'pending'
-    },
-    {
-      id: 'dubbing',
-      name: 'AI Dubbing',
-      description: 'Generating dubbed audio tracks',
-      icon: Volume2,
       status: 'pending'
     }
   ]);
+  
+  const getElapsedTime = () => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
-  const { data: video } = useQuery({
+  const { data: video, error: videoError } = useQuery({
     queryKey: ['/api/videos', videoId],
     refetchInterval: 2000,
-    enabled: !!videoId
+    enabled: !!videoId && !hasTimedOut,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
-  const { data: transcriptions } = useQuery({
+  const { data: transcriptions, error: transcriptionError } = useQuery({
     queryKey: ['/api/videos', videoId, 'transcriptions'],
     refetchInterval: 3000,
-    enabled: !!videoId
+    enabled: !!videoId && !hasTimedOut,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
+  
+  // Timeout handling - 10 minutes
+  useEffect(() => {
+    const timeoutDuration = 10 * 60 * 1000; // 10 minutes
+    const timer = setTimeout(() => {
+      if (video?.status === 'processing') {
+        setHasTimedOut(true);
+        setSteps(prev => prev.map(step => 
+          step.id === 'transcription' 
+            ? { ...step, status: 'failed' as const, error: `Processing timed out after ${getElapsedTime()}` }
+            : step
+        ));
+      }
+    }, timeoutDuration);
+    
+    return () => clearTimeout(timer);
+  }, [video?.status]);
 
   const { data: translations } = useQuery({
     queryKey: ['/api/videos', videoId, 'translations'],

@@ -1,4 +1,4 @@
-import type { Express, Request } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
@@ -44,7 +44,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Start background analysis (language detection only)
-      analyzeVideoWithTimeout(video.id).catch(console.error);
+      analyzeVideoWithTimeout(video.id).catch(error => {
+        console.error(`Failed to analyze video ${video.id}:`, error);
+      });
 
       res.json(video);
     } catch (error) {
@@ -111,18 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get video by ID
-  app.get("/api/videos/:id", async (req, res) => {
-    try {
-      const video = await storage.getVideo(parseInt(req.params.id));
-      if (!video) {
-        return res.status(404).json({ message: "Video not found" });
-      }
-      res.json(video);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch video", error: error instanceof Error ? error.message : "Unknown error" });
-    }
-  });
+
 
   // Process video endpoint
   app.post("/api/videos/:id/process", async (req, res) => {
@@ -602,7 +593,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Start processing based on selected services
-      processVideoWithTimeout(videoId, models).catch(console.error);
+      processVideoWithTimeout(videoId, models).catch(error => {
+        console.error(`Failed to process video ${videoId}:`, error);
+      });
       
       res.json({ message: "Service selection saved and processing started" });
     } catch (error) {
@@ -617,9 +610,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 async function analyzeVideoWithTimeout(videoId: number) {
   const ANALYSIS_TIMEOUT = 5 * 60 * 1000; // 5 minutes
   
-  const timeout = setTimeout(async () => {
+  const timeout = setTimeout(() => {
     console.error(`Analysis timeout for video ${videoId}`);
-    await storage.updateVideoStatus(videoId, "failed");
+    storage.updateVideoStatus(videoId, "failed").catch(error => {
+      console.error(`Failed to update video status after timeout:`, error);
+    });
   }, ANALYSIS_TIMEOUT);
   
   try {
@@ -663,9 +658,11 @@ async function analyzeVideo(videoId: number) {
 async function processVideoWithTimeout(videoId: number, selectedModels?: string[]) {
   const PROCESSING_TIMEOUT = 10 * 60 * 1000; // 10 minutes
   
-  const timeout = setTimeout(async () => {
+  const timeout = setTimeout(() => {
     console.error(`Processing timeout for video ${videoId}`);
-    await storage.updateVideoStatus(videoId, "failed");
+    storage.updateVideoStatus(videoId, "failed").catch(error => {
+      console.error(`Failed to update video status after timeout:`, error);
+    });
   }, PROCESSING_TIMEOUT);
   
   try {

@@ -224,6 +224,17 @@ Changelog:
   - Confirmed ElevenLabs dubbing studio integration creating jobs properly
   - Resolved disconnect between passing backend tests and broken frontend user experience
   - Application now provides authentic real-user experience with proper state management and UI updates
+
+- July 09, 2025. Real-Time Subtitle Overlays and Dynamic Confidence Scoring
+  - Added real-time subtitle overlays to video player showing current transcription/translation text
+  - Implemented subtitle language switching (Bengali, English, Hindi, Tamil, Telugu, Malayalam)
+  - Added subtitle visibility toggle and control panel on video player
+  - Enhanced confidence scoring to use dynamic calculations instead of static 85%/95% values
+  - Updated translation batch service with realistic confidence metrics based on text analysis
+  - Added model source indicators showing which AI model generated each transcription segment
+  - Improved storage interface to handle confidence updates with optional parameters
+  - Subtitles display speaker names, confidence scores, and model attribution in real-time
+  - Video player now provides complete subtitle experience with professional overlay styling
 ```
 
 ## User Preferences

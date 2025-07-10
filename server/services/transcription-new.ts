@@ -3,6 +3,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { 
+  enhanceTranscriptionWithStandards, 
+  calculateEnhancedConfidence, 
+  splitLongSegment,
+  NETFLIX_STANDARDS 
+} from './subtitling-standards.js';
 
 const execAsync = promisify(exec);
 
@@ -30,21 +36,52 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
     const transcriptionResult = await transcribeAudio(audioPath);
     console.log(`[TRANSCRIPTION] Transcription completed`);
 
-    // Create transcription records
+    // Create transcription records with studio-grade standards
     const transcriptions = [];
     
     if (transcriptionResult.segments && transcriptionResult.segments.length > 0) {
       for (const segment of transcriptionResult.segments) {
-        const transcription = await storage.createTranscription({
-          videoId: videoId,
-          text: segment.text.trim(),
-          startTime: segment.start,
-          endTime: segment.end,
-          confidence: segment.confidence || 0.85,
-          model: 'openai-whisper',
-          isAlternative: false
-        });
-        transcriptions.push(transcription);
+        const segmentText = segment.text.trim();
+        const rawConfidence = segment.confidence || 0.85;
+        
+        // Apply studio-grade standards analysis
+        const enhancedSegment = enhanceTranscriptionWithStandards(
+          segmentText,
+          segment.start,
+          segment.end,
+          rawConfidence,
+          'openai-whisper'
+        );
+        
+        // Calculate studio-grade confidence score
+        const enhancedConfidence = calculateEnhancedConfidence(
+          rawConfidence,
+          'openai-whisper',
+          enhancedSegment.qualityScore,
+          segmentText.length,
+          segment.end - segment.start
+        );
+        
+        // Split segments that are too long according to Netflix standards
+        const standardizedSegments = splitLongSegment(
+          segmentText,
+          segment.start,
+          segment.end,
+          NETFLIX_STANDARDS.maxDuration
+        );
+        
+        for (const stdSegment of standardizedSegments) {
+          const transcription = await storage.createTranscription({
+            videoId: videoId,
+            text: stdSegment.text,
+            startTime: stdSegment.startTime,
+            endTime: stdSegment.endTime,
+            confidence: enhancedConfidence,
+            model: 'openai-whisper',
+            isAlternative: false
+          });
+          transcriptions.push(transcription);
+        }
       }
     } else {
       // Create single transcription if no segments
@@ -53,7 +90,7 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
         text: transcriptionResult.text || 'No transcription available',
         startTime: 0,
         endTime: duration,
-        confidence: 0.85,
+        confidence: 0.75, // Lower confidence for non-segmented output
         model: 'openai-whisper',
         isAlternative: false
       });

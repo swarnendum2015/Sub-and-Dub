@@ -122,9 +122,50 @@ export function EditableTranscriptionPanel({
   };
 
   const getConfidenceColor = (confidence: number): string => {
-    if (confidence >= 0.9) return 'bg-green-100 text-green-700';
-    if (confidence >= 0.7) return 'bg-yellow-100 text-yellow-700';
-    return 'bg-red-100 text-red-700';
+    if (confidence >= 0.95) return 'bg-emerald-100 text-emerald-800 border-emerald-200'; // Studio grade
+    if (confidence >= 0.85) return 'bg-green-100 text-green-700 border-green-200';      // Broadcast ready
+    if (confidence >= 0.75) return 'bg-yellow-100 text-yellow-700 border-yellow-200';  // Review needed
+    if (confidence >= 0.65) return 'bg-orange-100 text-orange-700 border-orange-200';  // Requires editing
+    return 'bg-red-100 text-red-700 border-red-200';                                   // Poor quality
+  };
+
+  const getConfidenceLabel = (confidence: number): string => {
+    if (confidence >= 0.95) return 'Studio Grade';
+    if (confidence >= 0.85) return 'Broadcast Ready';
+    if (confidence >= 0.75) return 'Review Needed';
+    if (confidence >= 0.65) return 'Requires Editing';
+    return 'Poor Quality';
+  };
+
+  const getModelAttribution = (model: string): { name: string, badge: string, color: string } => {
+    const attributions: Record<string, { name: string, badge: string, color: string }> = {
+      'openai-whisper': {
+        name: 'OpenAI Whisper',
+        badge: 'OpenAI',
+        color: 'bg-green-100 text-green-700 border-green-200'
+      },
+      'google-speech': {
+        name: 'Google Speech-to-Text',
+        badge: 'Google',
+        color: 'bg-blue-100 text-blue-700 border-blue-200'
+      },
+      'elevenlabs-stt': {
+        name: 'ElevenLabs Speech',
+        badge: 'ElevenLabs',
+        color: 'bg-purple-100 text-purple-700 border-purple-200'
+      },
+      'gemini-2.5-pro': {
+        name: 'Google Gemini 2.5 Pro',
+        badge: 'Gemini',
+        color: 'bg-amber-100 text-amber-700 border-amber-200'
+      }
+    };
+
+    return attributions[model] || {
+      name: 'Unknown Model',
+      badge: 'Unknown',
+      color: 'bg-gray-100 text-gray-700 border-gray-200'
+    };
   };
 
   const getLanguageName = (code: string): string => {
@@ -759,20 +800,48 @@ export function EditableTranscriptionPanel({
                     {formatTime(transcription.startTime)} - {formatTime(transcription.endTime)}
                   </span>
                   <div className="flex items-center space-x-1">
+                    {/* Studio-grade confidence score */}
                     {displayItem?.confidence && (
-                      <Badge className={`text-xs ${getConfidenceColor(displayItem.confidence)}`}>
-                        {Math.round(displayItem.confidence * 100)}%
+                      <div className="flex items-center space-x-1">
+                        <Badge className={`text-xs border ${getConfidenceColor(displayItem.confidence)}`}>
+                          {Math.round(displayItem.confidence * 100)}%
+                        </Badge>
+                        <span className={`text-xs font-medium ${
+                          displayItem.confidence >= 0.95 ? 'text-emerald-600' :
+                          displayItem.confidence >= 0.85 ? 'text-green-600' :
+                          displayItem.confidence >= 0.75 ? 'text-yellow-600' :
+                          displayItem.confidence >= 0.65 ? 'text-orange-600' : 'text-red-600'
+                        }`}>
+                          {getConfidenceLabel(displayItem.confidence)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Model attribution */}
+                    {currentLanguage === 'bn' && transcription.model && (
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs border ${getModelAttribution(transcription.model).color}`}
+                        title={getModelAttribution(transcription.model).name}
+                      >
+                        {getModelAttribution(transcription.model).badge}
                       </Badge>
                     )}
-                    {/* Model source indicator */}
-                    {currentLanguage === 'bn' && transcription.modelSource && (
-                      <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                        {transcription.modelSource}
+                    
+                    {/* Translation model for non-Bengali */}
+                    {currentLanguage !== 'bn' && translation?.model && (
+                      <Badge 
+                        variant="outline" 
+                        className={`text-xs border ${getModelAttribution(translation.model).color}`}
+                        title={getModelAttribution(translation.model).name}
+                      >
+                        {getModelAttribution(translation.model).badge}
                       </Badge>
                     )}
+                    
                     {/* Speaker identification */}
                     {currentLanguage === 'bn' && transcription.speakerId && (
-                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+                      <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
                         {transcription.speakerName || `Speaker ${transcription.speakerId}`}
                       </Badge>
                     )}

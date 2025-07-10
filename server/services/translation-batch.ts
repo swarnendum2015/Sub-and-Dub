@@ -1,4 +1,10 @@
 import { storage } from "../storage";
+import { 
+  enhanceTranscriptionWithStandards, 
+  calculateEnhancedConfidence, 
+  validateSubtitleSegment,
+  NETFLIX_STANDARDS 
+} from './subtitling-standards.js';
 
 // Fallback if Google GenAI is not available, use OpenAI
 async function translateBatchWithOpenAI(batchText: string, targetLanguage: string): Promise<string> {
@@ -89,71 +95,47 @@ interface TranslationSegment {
   originalText?: string;
 }
 
-// Calculate translation confidence based on quality metrics
-function calculateTranslationConfidence(originalText: string, translatedText: string): number {
+// Calculate translation confidence based on studio-grade quality metrics
+function calculateTranslationConfidence(
+  originalText: string, 
+  translatedText: string, 
+  startTime: number, 
+  endTime: number
+): number {
   if (!originalText || !translatedText) return 0.1;
   
-  // Professional translation confidence scoring based on subtitling standards
+  // Studio-grade translation confidence scoring
+  const duration = endTime - startTime;
+  
+  // Validate against subtitle standards
+  const validation = validateSubtitleSegment(translatedText, startTime, endTime);
+  
+  // Professional translation quality metrics
   const originalWords = originalText.trim().split(/\s+/).length;
   const translatedWords = translatedText.trim().split(/\s+/).length;
   const lengthRatio = translatedWords / originalWords;
   
-  // Subtitle timing and readability metrics
-  const charsPerSecond = translatedText.length / 3; // Assume 3-second segment average
-  const idealCPS = 20; // Characters per second for readable subtitles
-  const readabilityScore = Math.min(1.0, idealCPS / Math.max(charsPerSecond, 10));
+  // Base confidence starts with subtitle standards compliance
+  let confidence = validation.qualityScore / 100;
   
-  // Language-specific length expectations for Bengali translations
-  let optimalLengthRange = { min: 0.6, max: 1.8 };
-  
-  let lengthScore = 1.0;
-  if (lengthRatio < optimalLengthRange.min || lengthRatio > optimalLengthRange.max) {
-    lengthScore = 0.75; // Outside optimal range
-  } else if (lengthRatio < 0.8 || lengthRatio > 1.4) {
-    lengthScore = 0.9; // Slightly outside ideal
+  // Adjust for optimal length ratio (0.8-1.2 is good for most language pairs)
+  if (lengthRatio >= 0.8 && lengthRatio <= 1.2) {
+    confidence += 0.1;
+  } else if (lengthRatio < 0.5 || lengthRatio > 2.0) {
+    confidence -= 0.2; // Severely penalize extreme length differences
   }
   
-  // Translation quality indicators
-  const qualityIndicators = {
-    hasPlaceholders: /\[.*\]|\(.*\)|{.*}/.test(translatedText),
-    hasErrorMarkers: /(unable|error|failed|cannot|न्हीं|नहीं)/i.test(translatedText),
-    hasRepeatedOriginal: translatedText.includes(originalText.substring(0, Math.min(10, originalText.length))),
-    hasIncompleteText: translatedText.length < 3 || translatedText.endsWith('...'),
-    hasProperPunctuation: /[.!?।]$/.test(translatedText.trim()),
-    hasNaturalFlow: !/\b(the the|a a|is is|and and)\b/i.test(translatedText)
-  };
-  
-  let qualityScore = 1.0;
-  if (qualityIndicators.hasPlaceholders || qualityIndicators.hasErrorMarkers) {
-    qualityScore = 0.4;
-  } else if (qualityIndicators.hasRepeatedOriginal || qualityIndicators.hasIncompleteText) {
-    qualityScore = 0.6;
-  } else if (!qualityIndicators.hasProperPunctuation || !qualityIndicators.hasNaturalFlow) {
-    qualityScore = 0.85;
+  // Reward proper duration compliance
+  if (duration >= NETFLIX_STANDARDS.minDuration && duration <= NETFLIX_STANDARDS.maxDuration) {
+    confidence += 0.05;
   }
   
-  // Context and complexity scoring
-  let complexityScore = 1.0;
-  if (originalWords <= 2) {
-    complexityScore = 0.95; // Very short phrases
-  } else if (originalWords <= 5) {
-    complexityScore = 0.92; // Short sentences
-  } else if (originalWords <= 10) {
-    complexityScore = 0.88; // Medium sentences
-  } else {
-    complexityScore = 0.85; // Long sentences
+  // Check for translation quality indicators
+  if (translatedText.length > 10 && !translatedText.includes('[') && !translatedText.includes('Unable')) {
+    confidence += 0.05;
   }
   
-  // Cultural and contextual adaptation bonus
-  const hasCulturalAdaptation = /sir|madam|ji|saheb|bhai|didi/i.test(originalText) && 
-                               !/sir|madam|ji|saheb|bhai|didi/i.test(translatedText);
-  const culturalScore = hasCulturalAdaptation ? 1.05 : 1.0;
-  
-  // Final confidence calculation
-  const finalConfidence = complexityScore * lengthScore * qualityScore * readabilityScore * culturalScore;
-  
-  // Ensure confidence is within reasonable bounds for professional subtitling
-  return Math.max(0.65, Math.min(0.98, finalConfidence));
+  return Math.max(0.1, Math.min(0.98, confidence));
 }
 
 export async function translateVideoBatch({ videoId, targetLanguage }: BatchTranslationRequest) {
@@ -225,8 +207,13 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
       const existingTranslation = existingTranslations.find(t => t.targetLanguage === targetLanguage);
       
       if (existingTranslation) {
-        // Update existing translation with new confidence
-        const newConfidence = calculateTranslationConfidence(segment.originalText || segment.text, segment.translatedText);
+        // Update existing translation with studio-grade confidence
+        const newConfidence = calculateTranslationConfidence(
+          segment.originalText || segment.text, 
+          segment.translatedText,
+          segment.startTime,
+          segment.endTime
+        );
         await storage.updateTranslation(existingTranslation.id, segment.translatedText, newConfidence);
         savedTranslations.push({
           ...existingTranslation,
@@ -234,13 +221,19 @@ export async function translateVideoBatch({ videoId, targetLanguage }: BatchTran
           confidence: newConfidence
         });
       } else {
-        // Create new translation
+        // Create new translation with studio-grade analysis
+        const studioConfidence = calculateTranslationConfidence(
+          segment.originalText || segment.text, 
+          segment.translatedText,
+          segment.startTime,
+          segment.endTime
+        );
         const newTranslation = await storage.createTranslation({
           transcriptionId: segment.id,
           targetLanguage,
           text: segment.translatedText,
-          confidence: calculateTranslationConfidence(segment.originalText, segment.translatedText), // Calculate real confidence
-          model: "gemini-batch"
+          confidence: studioConfidence,
+          model: "gemini-2.5-pro"
         });
         savedTranslations.push(newTranslation);
       }

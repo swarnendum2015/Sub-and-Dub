@@ -1,362 +1,428 @@
 import { useParams, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Clock, 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  FileVideo, 
-  Mic, 
-  Languages,
-  BrainCircuit,
-  ArrowRight,
-  RefreshCw
-} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { AlertCircle, CheckCircle, Clock, Play, Upload, Mic, Languages, Settings, FileText, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+
+interface Video {
+  id: number;
+  filename: string;
+  originalName: string;
+  filePath: string;
+  status: string;
+  sourceLanguage?: string;
+  sourceLanguageConfidence?: number;
+  services?: string[];
+  models?: string[];
+  targetLanguages?: string[];
+  bengaliConfirmed?: boolean;
+  duration?: number;
+  createdAt: string;
+  errorMessage?: string;
+}
 
 export default function ProcessingPage() {
-  const { id: videoId } = useParams();
+  const { videoId } = useParams();
   const [, setLocation] = useLocation();
+  const [processingStage, setProcessingStage] = useState<string>('uploading');
+  const queryClient = useQueryClient();
 
-  const { data: video, refetch } = useQuery({
+  const { data: video, isLoading, error } = useQuery<Video>({
     queryKey: ['/api/videos', videoId],
-    refetchInterval: (data) => {
-      // Stop polling when processing is complete
-      if (data?.status === 'completed' || data?.status === 'failed') {
-        return false;
-      }
-      return 2000; // Poll every 2 seconds during processing
-    },
     enabled: !!videoId,
+    refetchInterval: 2000, // Poll every 2 seconds
   });
 
-  const { data: transcriptions = [] } = useQuery({
-    queryKey: ['/api/videos', videoId, 'transcriptions'],
-    enabled: !!videoId && video?.status === 'completed',
+  const retryMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/videos/${videoId}/retry`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to retry processing');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
+    },
   });
 
-  // Auto-redirect when processing is complete
+  const fixStuckMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/admin/fix-stuck-jobs', {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fix stuck jobs');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/videos', videoId] });
+    },
+  });
+
+  // Update processing stage based on video status
   useEffect(() => {
-    if (video?.status === 'completed' && transcriptions.length > 0) {
-      // Small delay to show completion state
+    if (video) {
+      switch (video.status) {
+        case 'uploading':
+          setProcessingStage('uploading');
+          break;
+        case 'analyzing':
+          setProcessingStage('analyzing');
+          break;
+        case 'analyzed':
+          setProcessingStage('analyzed');
+          break;
+        case 'processing':
+          setProcessingStage('transcribing');
+          break;
+        case 'completed':
+          setProcessingStage('completed');
+          break;
+        case 'failed':
+          setProcessingStage('failed');
+          break;
+        default:
+          setProcessingStage('uploading');
+      }
+    }
+  }, [video?.status]);
+
+  // Auto-redirect to workspace when completed
+  useEffect(() => {
+    if (video?.status === 'completed') {
       const timer = setTimeout(() => {
         setLocation(`/workspace/${videoId}`);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [video?.status, transcriptions.length, videoId, setLocation]);
+  }, [video?.status, videoId, setLocation]);
 
-  if (!video) {
+  const getProgressPercentage = () => {
+    switch (processingStage) {
+      case 'uploading': return 10;
+      case 'analyzing': return 30;
+      case 'analyzed': return 50;
+      case 'transcribing': return 75;
+      case 'completed': return 100;
+      case 'failed': return 0;
+      default: return 0;
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (processingStage) {
+      case 'uploading':
+        return <Upload className="w-6 h-6 text-blue-600 animate-pulse" />;
+      case 'analyzing':
+        return <Settings className="w-6 h-6 text-yellow-600 animate-spin" />;
+      case 'analyzed':
+        return <CheckCircle className="w-6 h-6 text-green-600" />;
+      case 'transcribing':
+        return <Mic className="w-6 h-6 text-purple-600 animate-pulse" />;
+      case 'completed':
+        return <CheckCircle className="w-6 h-6 text-green-600" />;
+      case 'failed':
+        return <AlertCircle className="w-6 h-6 text-red-600" />;
+      default:
+        return <Clock className="w-6 h-6 text-gray-400" />;
+    }
+  };
+
+  const getStatusMessage = () => {
+    switch (processingStage) {
+      case 'uploading':
+        return 'Uploading video file...';
+      case 'analyzing':
+        return 'Analyzing video and detecting language...';
+      case 'analyzed':
+        return 'Analysis complete. Ready for service selection.';
+      case 'transcribing':
+        return 'Transcribing video content using AI models...';
+      case 'completed':
+        return 'Processing complete! Redirecting to workspace...';
+      case 'failed':
+        return `Processing failed: ${video?.errorMessage || 'Unknown error occurred'}`;
+      default:
+        return 'Initializing...';
+    }
+  };
+
+  const handleRetry = () => {
+    retryMutation.mutate();
+  };
+
+  const handleFixStuck = () => {
+    fixStuckMutation.mutate();
+  };
+
+  const handleProceedToWorkspace = () => {
+    setLocation(`/workspace/${videoId}`);
+  };
+
+  const handleSelectServices = () => {
+    setLocation(`/select-services/${videoId}`);
+  };
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading video details...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading video information...</p>
         </div>
       </div>
     );
   }
 
-  const getStatusInfo = () => {
-    switch (video.status) {
-      case 'pending':
-        return {
-          icon: Clock,
-          color: 'bg-yellow-100 text-yellow-800',
-          title: 'Queued for Processing',
-          description: 'Your video is in the processing queue.',
-          progress: 10
-        };
-      case 'analyzing':
-        return {
-          icon: BrainCircuit,
-          color: 'bg-blue-100 text-blue-800',
-          title: 'Analyzing Video',
-          description: 'Detecting language and preparing for transcription.',
-          progress: 25
-        };
-      case 'processing':
-      case 'transcribing':
-        return {
-          icon: Mic,
-          color: 'bg-purple-100 text-purple-800',
-          title: 'Transcribing Audio',
-          description: 'Converting speech to text using AI models.',
-          progress: 65
-        };
-      case 'completed':
-        return {
-          icon: CheckCircle,
-          color: 'bg-green-100 text-green-800',
-          title: 'Processing Complete',
-          description: `Transcription completed with ${transcriptions.length} segments.`,
-          progress: 100
-        };
-      case 'failed':
-        return {
-          icon: AlertCircle,
-          color: 'bg-red-100 text-red-800',
-          title: 'Processing Failed',
-          description: 'An error occurred during processing.',
-          progress: 0
-        };
-      default:
-        return {
-          icon: Clock,
-          color: 'bg-gray-100 text-gray-800',
-          title: 'Unknown Status',
-          description: 'Processing status unclear.',
-          progress: 0
-        };
-    }
-  };
-
-  const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
-
-  const formatDuration = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  if (error || !video) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Video Not Found</h2>
+              <p className="text-gray-600 mb-4">
+                The video you're looking for doesn't exist or has been removed.
+              </p>
+              <Button onClick={() => setLocation('/')} variant="outline">
+                Back to Upload
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Video Processing</h1>
-          <p className="text-gray-600">Studio-grade transcription and analysis in progress</p>
-        </div>
-
-        {/* Main Status Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center space-x-3">
-                <StatusIcon className="w-6 h-6" />
-                <span>{statusInfo.title}</span>
-              </CardTitle>
-              <Badge className={statusInfo.color}>
-                {video.status}
-              </Badge>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <FileText className="w-4 h-4 text-white" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-gray-600">{statusInfo.description}</p>
-              
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Progress</span>
-                  <span>{statusInfo.progress}%</span>
-                </div>
-                <Progress value={statusInfo.progress} className="h-2" />
-              </div>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">Processing Video</h1>
+              <p className="text-sm text-gray-500">{video.originalName}</p>
+            </div>
+          </div>
+          <Button variant="outline" onClick={() => setLocation('/')}>
+            Back to Upload
+          </Button>
+        </div>
+      </header>
 
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto px-6 py-8">
+        <div className="space-y-6">
+          {/* Progress Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                {getStatusIcon()}
+                <span>Processing Status</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600">{getStatusMessage()}</p>
+                <Badge variant={processingStage === 'failed' ? 'destructive' : 
+                              processingStage === 'completed' ? 'default' : 'secondary'}>
+                  {processingStage.charAt(0).toUpperCase() + processingStage.slice(1)}
+                </Badge>
+              </div>
+              <Progress value={getProgressPercentage()} className="w-full" />
+              
               {/* Processing Steps */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
                 <div className={`flex items-center space-x-2 p-3 rounded-lg ${
-                  ['analyzing', 'processing', 'transcribing', 'completed'].includes(video.status) 
+                  ['uploading', 'analyzing', 'analyzed', 'transcribing', 'completed'].includes(processingStage) 
                     ? 'bg-green-50 text-green-700' 
                     : 'bg-gray-50 text-gray-500'
                 }`}>
-                  <BrainCircuit className="w-4 h-4" />
-                  <span className="text-sm font-medium">Analysis</span>
-                  {['analyzing', 'processing', 'transcribing', 'completed'].includes(video.status) && (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm font-medium">Upload</span>
                 </div>
                 
                 <div className={`flex items-center space-x-2 p-3 rounded-lg ${
-                  ['processing', 'transcribing', 'completed'].includes(video.status)
+                  ['analyzing', 'analyzed', 'transcribing', 'completed'].includes(processingStage)
+                    ? 'bg-green-50 text-green-700' 
+                    : processingStage === 'uploading'
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'bg-gray-50 text-gray-500'
+                }`}>
+                  <Settings className="w-4 h-4" />
+                  <span className="text-sm font-medium">Analyze</span>
+                </div>
+                
+                <div className={`flex items-center space-x-2 p-3 rounded-lg ${
+                  ['transcribing', 'completed'].includes(processingStage)
                     ? 'bg-green-50 text-green-700'
-                    : video.status === 'analyzing' 
+                    : ['analyzing', 'analyzed'].includes(processingStage)
                     ? 'bg-blue-50 text-blue-700'
                     : 'bg-gray-50 text-gray-500'
                 }`}>
                   <Mic className="w-4 h-4" />
-                  <span className="text-sm font-medium">Transcription</span>
-                  {['completed'].includes(video.status) && (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {['processing', 'transcribing'].includes(video.status) && (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  )}
+                  <span className="text-sm font-medium">Transcribe</span>
                 </div>
                 
                 <div className={`flex items-center space-x-2 p-3 rounded-lg ${
-                  video.status === 'completed' 
+                  processingStage === 'completed'
                     ? 'bg-green-50 text-green-700'
+                    : ['transcribing'].includes(processingStage)
+                    ? 'bg-blue-50 text-blue-700'
                     : 'bg-gray-50 text-gray-500'
                 }`}>
                   <Languages className="w-4 h-4" />
-                  <span className="text-sm font-medium">Review</span>
-                  {video.status === 'completed' && (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                </div>
-                
-                <div className="flex items-center space-x-2 p-3 rounded-lg bg-gray-50 text-gray-500">
-                  <FileVideo className="w-4 h-4" />
-                  <span className="text-sm font-medium">Translation</span>
+                  <span className="text-sm font-medium">Complete</span>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Video Information */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Video Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">Filename</p>
-                <p className="font-medium truncate">{video.originalName}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">File Size</p>
-                <p className="font-medium">{formatFileSize(video.fileSize)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Duration</p>
-                <p className="font-medium">
-                  {video.duration ? formatDuration(video.duration) : 'Analyzing...'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Source Language</p>
-                <p className="font-medium">
-                  {video.sourceLanguage ? (
-                    <span className="flex items-center space-x-1">
-                      <span>{video.sourceLanguage.toUpperCase()}</span>
-                      {video.sourceLanguageConfidence && (
-                        <Badge variant="outline" className="text-xs">
-                          {Math.round(video.sourceLanguageConfidence * 100)}%
-                        </Badge>
-                      )}
-                    </span>
-                  ) : (
-                    'Detecting...'
-                  )}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Processing Details */}
-        {video.status === 'processing' && (
-          <Card className="mb-6">
+          {/* Video Information */}
+          <Card>
             <CardHeader>
-              <CardTitle>Processing Details</CardTitle>
+              <CardTitle>Video Details</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  <span>Using OpenAI Whisper for high-accuracy transcription</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">File Name</label>
+                  <p className="text-sm text-gray-900">{video.originalName}</p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Estimated completion: 2-5 minutes</span>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status</label>
+                  <p className="text-sm text-gray-900 capitalize">{video.status}</p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <BrainCircuit className="w-4 h-4 text-purple-600" />
-                  <span className="text-gray-600">Applying studio-grade subtitling standards</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Error Handling */}
-        {video.status === 'failed' && (
-          <Alert className="mb-6 border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
-              Processing failed. This could be due to:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Audio quality issues or corrupted file</li>
-                <li>API quota limits exceeded</li>
-                <li>Unsupported video format or encoding</li>
-                <li>Network connectivity problems</li>
-              </ul>
-              <div className="mt-4">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    fetch(`/api/videos/${videoId}/retry`, { method: 'POST' })
-                      .then(() => refetch())
-                      .catch(console.error);
-                  }}
-                  className="text-red-700 border-red-300 hover:bg-red-100"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Retry Processing
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Success State */}
-        {video.status === 'completed' && transcriptions.length > 0 && (
-          <Card className="border-green-200 bg-green-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                {video.sourceLanguage && (
                   <div>
-                    <h3 className="text-lg font-semibold text-green-900">
-                      Processing Complete!
-                    </h3>
-                    <p className="text-green-700">
-                      Successfully transcribed {transcriptions.length} segments. 
-                      Redirecting to workspace...
+                    <label className="text-sm font-medium text-gray-500">Detected Language</label>
+                    <p className="text-sm text-gray-900">
+                      {video.sourceLanguage.toUpperCase()} 
+                      {video.sourceLanguageConfidence && (
+                        <span className="text-gray-500 ml-1">
+                          ({Math.round(video.sourceLanguageConfidence * 100)}% confidence)
+                        </span>
+                      )}
                     </p>
                   </div>
-                </div>
-                <Button 
-                  onClick={() => setLocation(`/workspace/${videoId}`)}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <ArrowRight className="w-4 h-4 mr-2" />
-                  Continue to Workspace
-                </Button>
+                )}
+                {video.duration && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Duration</label>
+                    <p className="text-sm text-gray-900">
+                      {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
-        )}
 
-        {/* Back to Upload */}
-        <div className="text-center mt-8">
-          <Button 
-            variant="outline" 
-            onClick={() => setLocation('/')}
-          >
-            Back to Upload
-          </Button>
+          {/* Error Handling */}
+          {processingStage === 'failed' && (
+            <Card className="border-red-200">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-red-700">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>Processing Failed</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-sm text-red-600">
+                    {video.errorMessage || 'An unknown error occurred during processing.'}
+                  </p>
+                  
+                  {video.errorMessage?.includes('quota') && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-start space-x-2">
+                        <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                        <div>
+                          <h4 className="text-sm font-medium text-yellow-800">API Quota Exceeded</h4>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            The AI service has reached its usage limit. This usually resolves automatically after a brief period.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex space-x-3">
+                    <Button 
+                      onClick={handleRetry} 
+                      disabled={retryMutation.isPending}
+                      variant="outline"
+                    >
+                      {retryMutation.isPending ? 'Retrying...' : 'Retry Processing'}
+                    </Button>
+                    <Button 
+                      onClick={handleFixStuck} 
+                      disabled={fixStuckMutation.isPending}
+                      variant="outline"
+                    >
+                      {fixStuckMutation.isPending ? 'Fixing...' : 'Fix Stuck Jobs'}
+                    </Button>
+                    <Button onClick={() => setLocation('/')} variant="secondary">
+                      Upload New Video
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Action Buttons */}
+          {processingStage === 'analyzed' && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Analysis Complete</h3>
+                  <p className="text-gray-600 mb-4">
+                    Your video has been analyzed. You can now select transcription and translation services.
+                  </p>
+                  <div className="flex justify-center space-x-3">
+                    <Button onClick={handleSelectServices}>
+                      Select Services
+                    </Button>
+                    <Button onClick={handleProceedToWorkspace} variant="outline">
+                      Skip to Workspace
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {processingStage === 'completed' && (
+            <Card className="border-green-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Processing Complete!</h3>
+                  <p className="text-gray-600 mb-4">
+                    Your video has been successfully processed. You can now view transcriptions and manage translations.
+                  </p>
+                  <Button onClick={handleProceedToWorkspace}>
+                    Open Workspace
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

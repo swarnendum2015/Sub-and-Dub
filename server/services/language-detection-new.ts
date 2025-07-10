@@ -131,6 +131,13 @@ async function detectWithGemini(audioPath: string): Promise<LanguageDetectionRes
     
   } catch (error) {
     console.error('[LANG-DETECT] Gemini detection failed:', error);
+    
+    // Handle quota exceeded specifically
+    if (error.status === 429 || (error.message && error.message.includes('quota'))) {
+      console.log('[LANG-DETECT] Gemini quota exceeded, using fallback detection');
+      return null;
+    }
+    
     return null;
   }
 }

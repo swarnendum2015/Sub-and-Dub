@@ -182,8 +182,15 @@ async function getVideoDuration(videoPath: string): Promise<number> {
 async function transcribeAudio(audioPath: string) {
   console.log('[TRANSCRIPTION] Starting transcription...');
   
-  // Use OpenAI Whisper
-  return transcribeWithOpenAI(audioPath);
+  try {
+    // Try OpenAI Whisper first (auto-detect language)
+    return await transcribeWithOpenAI(audioPath);
+  } catch (error) {
+    console.error('[TRANSCRIPTION] OpenAI Whisper failed:', error);
+    
+    // For now, throw the error - in future we could add fallback to other services
+    throw new Error(`Transcription failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function transcribeWithOpenAI(audioPath: string) {
@@ -209,7 +216,7 @@ async function transcribeWithOpenAI(audioPath: string) {
     const transcription = await openai.audio.transcriptions.create({
       file: audioReadStream,
       model: 'whisper-1',
-      language: 'bn', // Bengali
+      // Let Whisper auto-detect the language instead of forcing Bengali
       response_format: 'verbose_json'
     });
     

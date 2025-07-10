@@ -424,16 +424,26 @@ export function EditableTranscriptionPanel({
             <TabsContent key={lang} value={lang} className="mt-4">
               {(() => {
                 if (lang === 'bn') {
-                  // console.log('Bengali tab - confirmed status:', bengaliConfirmed);
-                  if (!bengaliConfirmed) {
-                    return (
-                      <div className="space-y-3">
+                  // For Bengali tab, always show the transcriptions with confirmation controls
+                  return (
+                    <div className="space-y-3">
+                      {!bengaliConfirmed ? (
                         <Alert>
                           <AlertCircle className="h-4 w-4" />
                           <AlertDescription>
-                            Please review and confirm the Bengali transcription before proceeding with translations.
+                            Please review and confirm the Bengali transcription below before proceeding with translations.
                           </AlertDescription>
                         </Alert>
+                      ) : (
+                        <div className="flex items-center space-x-2 p-3 bg-green-50 rounded-lg">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                          <span className="text-sm text-green-800">
+                            Bengali transcription confirmed and ready for translation
+                          </span>
+                        </div>
+                      )}
+                      
+                      {!bengaliConfirmed && (
                         <Button 
                           size="sm" 
                           onClick={() => confirmBengaliMutation.mutate()}
@@ -447,18 +457,9 @@ export function EditableTranscriptionPanel({
                           )}
                           Confirm Bengali Transcription
                         </Button>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="flex items-center space-x-2 p-3 bg-green-50 rounded-lg">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="text-sm text-green-800">
-                          Bengali transcription confirmed and ready for translation
-                        </span>
-                      </div>
-                    );
-                  }
+                      )}
+                    </div>
+                  );
                 }
                 
                 // Translation languages

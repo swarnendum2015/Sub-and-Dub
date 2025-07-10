@@ -248,6 +248,16 @@ Changelog:
   - Improved API quota handling with graceful fallback logic between OpenAI, Gemini, and Azure
   - All promise rejections now properly caught and logged for debugging
   - Application now stable with reliable error recovery and proper status reporting
+
+- July 10, 2025. User Workflow Fixes and Bengali Confirmation Logic
+  - Fixed OpenAI Whisper Bengali language support by using auto-detection instead of unsupported 'bn' parameter
+  - Added Google AI API key (GOOGLE_AI_API_KEY) for proper language detection with Gemini models
+  - Resolved transcription display issue - Bengali tab now shows all transcription segments with confirmation controls
+  - Fixed duplicate Bengali confirmation endpoints and cleaned up routes logic
+  - Enhanced Bengali confirmation workflow: transcription completes → user reviews → manual confirmation → translation enabled
+  - Updated UI to properly reflect bengaliConfirmed database status (false by default after transcription)
+  - Translation buttons now properly disabled until Bengali transcription is manually confirmed by user
+  - System correctly processes mixed language content (Gujarati/English) through OpenAI auto-detection
 ```
 
 ## User Preferences

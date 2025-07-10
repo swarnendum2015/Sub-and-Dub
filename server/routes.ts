@@ -298,7 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Confirm Bengali transcription
+  // Confirm Bengali transcription (primary endpoint)
   app.post("/api/videos/:id/confirm-transcription", async (req, res) => {
     try {
       const videoId = parseInt(req.params.id);
@@ -310,9 +310,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Update video Bengali confirmation status
       await storage.updateVideoBengaliConfirmed(videoId, true);
+      console.log(`[CONFIRM] Bengali transcription confirmed for video ${videoId}`);
       
-      res.json({ message: "Bengali transcription confirmed successfully" });
+      res.json({ message: "Bengali transcription confirmed successfully", videoId });
     } catch (error) {
+      console.error("Error confirming transcription:", error);
       res.status(500).json({ message: "Failed to confirm transcription", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
@@ -389,26 +391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Confirm Bengali transcription (no automatic translation)
-  app.post("/api/videos/:id/confirm-transcription", async (req: Request, res: Response) => {
-    const videoId = parseInt(req.params.id);
-    
-    try {
-      const video = await storage.getVideo(videoId);
-      if (!video) {
-        return res.status(404).json({ error: "Video not found" });
-      }
-      
-      // Update the database to mark Bengali as confirmed
-      await storage.updateVideoBengaliConfirmed(videoId, true);
-      console.log(`Bengali transcription confirmed for video ${videoId}`);
-      
-      res.json({ message: "Bengali transcription confirmed successfully", videoId });
-    } catch (error) {
-      console.error("Error confirming transcription:", error);
-      res.status(500).json({ error: "Failed to confirm transcription" });
-    }
-  });
+
   
   // Translate video to specific language using batch processing
   app.post("/api/videos/:id/translate", async (req: Request, res: Response) => {

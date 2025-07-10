@@ -68,12 +68,18 @@ export function VideoPlayer({ videoId, currentTime, onTimeUpdate }: VideoPlayerP
           const translations = await response.json();
           return translations.find((t: any) => t.targetLanguage === subtitleLanguage);
         } catch (error) {
+          console.error(`Failed to fetch translation for transcription ${transcription.id}:`, error);
           return null;
         }
       });
       
-      const translations = await Promise.all(translationPromises);
-      return translations.filter(Boolean);
+      try {
+        const translations = await Promise.all(translationPromises);
+        return translations.filter(Boolean);
+      } catch (error) {
+        console.error('Error fetching translations:', error);
+        return [];
+      }
     },
     enabled: !!videoId && !!transcriptions.length && subtitleLanguage !== 'bn',
   });

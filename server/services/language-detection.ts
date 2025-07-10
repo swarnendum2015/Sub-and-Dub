@@ -247,18 +247,31 @@ function mapWhisperLanguage(whisperLang: string): string {
   // Map Whisper language codes to our supported codes
   const mapping: Record<string, string> = {
     'bn': 'bn', // Bengali
+    'bengali': 'bn', // Bengali (full name)
     'en': 'en', // English
+    'english': 'en', // English (full name)
     'hi': 'hi', // Hindi
+    'hindi': 'hi', // Hindi (full name)
     'ta': 'ta', // Tamil
+    'tamil': 'ta', // Tamil (full name)
     'te': 'te', // Telugu
+    'telugu': 'te', // Telugu (full name)
     'ml': 'ml', // Malayalam
+    'malayalam': 'ml', // Malayalam (full name)
     'ur': 'ur', // Urdu
+    'urdu': 'ur', // Urdu (full name)
     'pa': 'pa', // Punjabi
+    'punjabi': 'pa', // Punjabi (full name)
     'gu': 'gu', // Gujarati
+    'gujarati': 'gu', // Gujarati (full name)
     'kn': 'kn', // Kannada
+    'kannada': 'kn', // Kannada (full name)
     'or': 'or', // Odia
+    'odia': 'or', // Odia (full name)
     'as': 'as', // Assamese
+    'assamese': 'as', // Assamese (full name)
     'mr': 'mr', // Marathi
+    'marathi': 'mr', // Marathi (full name)
     'ne': 'ne', // Nepali
     'si': 'si', // Sinhala
     'my': 'my', // Myanmar

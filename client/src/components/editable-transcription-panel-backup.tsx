@@ -89,7 +89,8 @@ export function EditableTranscriptionPanel({
       const translationMap: Record<number, Translation[]> = {};
       
       // Fetch translations for all transcriptions
-      await Promise.all(
+      try {
+        await Promise.all(
         transcriptions.map(async (t: Transcription) => {
           try {
             const res = await fetch(`/api/transcriptions/${t.id}/translations`);
@@ -102,6 +103,9 @@ export function EditableTranscriptionPanel({
           }
         })
       );
+      } catch (error) {
+        console.error('Error fetching translations:', error);
+      }
       
       return translationMap;
     },

@@ -77,8 +77,13 @@ export function EditableTranscriptionPanel({
         }
       });
       
-      const allTranslations = await Promise.all(translationPromises);
-      return allTranslations.flat();
+      try {
+        const allTranslations = await Promise.all(translationPromises);
+        return allTranslations.flat();
+      } catch (error) {
+        console.error('Error fetching translations:', error);
+        return [];
+      }
     },
     enabled: !!videoId && transcriptions.length > 0,
     refetchInterval: 2000, // Refetch every 2 seconds to catch new translations

@@ -117,33 +117,57 @@ async function extractAudioSample(videoPath: string): Promise<string> {
   const outputPath = path.join(path.dirname(videoPath), `lang_detect_${Date.now()}.wav`);
   
   return new Promise((resolve, reject) => {
-    const ffmpeg = spawn('ffmpeg', [
-      '-i', videoPath,
-      '-t', '30', // First 30 seconds
-      '-vn', // No video
-      '-acodec', 'pcm_s16le',
-      '-ar', '16000', // 16kHz sample rate
-      '-ac', '1', // Mono
-      '-y', // Overwrite output file
-      outputPath
-    ]);
+    try {
+      const ffmpeg = spawn('ffmpeg', [
+        '-i', videoPath,
+        '-t', '30', // First 30 seconds
+        '-vn', // No video
+        '-acodec', 'pcm_s16le',
+        '-ar', '16000', // 16kHz sample rate
+        '-ac', '1', // Mono
+        '-y', // Overwrite output file
+        outputPath
+      ]);
 
-    ffmpeg.on('close', (code) => {
-      if (code === 0) {
-        resolve(outputPath);
-      } else {
-        reject(new Error(`FFmpeg failed with code ${code}`));
-      }
-    });
+      ffmpeg.on('close', (code) => {
+        if (code === 0) {
+          resolve(outputPath);
+        } else {
+          reject(new Error(`FFmpeg failed with code ${code}`));
+        }
+      });
 
-    ffmpeg.on('error', reject);
+      ffmpeg.on('error', (error) => {
+        console.error('FFmpeg process error:', error);
+        reject(error);
+      });
+
+      ffmpeg.stderr?.on('data', (data) => {
+        // Log ffmpeg stderr for debugging but don't reject
+        console.log('FFmpeg stderr:', data.toString());
+      });
+      
+    } catch (error) {
+      console.error('Failed to spawn FFmpeg process:', error);
+      reject(error);
+    }
   });
 }
 
 async function detectWithWhisper(audioPath: string): Promise<LanguageDetectionResult | null> {
+  let fileStream = null;
   try {
+    // Create file stream with error handling
+    fileStream = fs.createReadStream(audioPath);
+    
+    // Handle stream errors
+    fileStream.on('error', (error) => {
+      console.error('File stream error:', error);
+      throw error;
+    });
+
     const response = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
+      file: fileStream,
       model: "whisper-1",
       language: undefined, // Let Whisper auto-detect
       response_format: "verbose_json",
@@ -171,6 +195,15 @@ async function detectWithWhisper(audioPath: string): Promise<LanguageDetectionRe
       console.error('Whisper language detection failed:', error);
     }
     return null;
+  } finally {
+    // Ensure file stream is properly closed
+    if (fileStream && typeof fileStream.destroy === 'function') {
+      try {
+        fileStream.destroy();
+      } catch (streamError) {
+        console.error('Error closing file stream:', streamError);
+      }
+    }
   }
 }
 

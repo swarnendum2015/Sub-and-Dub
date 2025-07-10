@@ -171,72 +171,86 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
 }
 
 async function extractAudio(videoPath: string): Promise<string> {
-  // Handle S3 URLs and YouTube URLs
-  if (videoPath.startsWith('http')) {
-    if (videoPath.includes('youtube.com') || videoPath.includes('youtu.be')) {
-      // YouTube URL - use yt-dlp to extract audio directly
-      const audioPath = path.join(process.cwd(), "uploads", `youtube_${Date.now()}.wav`);
-      
-      await execAsync(`yt-dlp --extract-audio --audio-format wav --audio-quality 0 "${videoPath}" -o "${audioPath.replace('.wav', '.%(ext)s')}"`);
-      
-      return audioPath;
-    } else {
-      // S3 URL - download and extract audio
-      const tempVideoPath = path.join(process.cwd(), "uploads", `s3_${Date.now()}.mp4`);
-      const audioPath = tempVideoPath.replace('.mp4', '.wav');
-      
-      // Download S3 file
-      await execAsync(`wget -O "${tempVideoPath}" "${videoPath}"`);
-      
-      // Extract audio from downloaded file
-      await execAsync(`ffmpeg -i "${tempVideoPath}" -acodec pcm_s16le -ac 1 -ar 16000 "${audioPath}"`);
-      
-      // Clean up temporary video file
-      await execAsync(`rm -f "${tempVideoPath}"`).catch(() => {});
-      
-      return audioPath;
+  try {
+    // Handle S3 URLs and YouTube URLs
+    if (videoPath.startsWith('http')) {
+      if (videoPath.includes('youtube.com') || videoPath.includes('youtu.be')) {
+        // YouTube URL - use yt-dlp to extract audio directly
+        const audioPath = path.join(process.cwd(), "uploads", `youtube_${Date.now()}.wav`);
+        
+        await execAsync(`yt-dlp --extract-audio --audio-format wav --audio-quality 0 "${videoPath}" -o "${audioPath.replace('.wav', '.%(ext)s')}"`);
+        
+        return audioPath;
+      } else {
+        // S3 URL - download and extract audio
+        const tempVideoPath = path.join(process.cwd(), "uploads", `s3_${Date.now()}.mp4`);
+        const audioPath = tempVideoPath.replace('.mp4', '.wav');
+        
+        // Download S3 file
+        await execAsync(`wget -O "${tempVideoPath}" "${videoPath}"`);
+        
+        // Extract audio from downloaded file
+        await execAsync(`ffmpeg -i "${tempVideoPath}" -acodec pcm_s16le -ac 1 -ar 16000 "${audioPath}"`);
+        
+        // Clean up temporary video file
+        await execAsync(`rm -f "${tempVideoPath}"`).catch(error => {
+          console.error('Error cleaning up temp video file:', error);
+        });
+        
+        return audioPath;
+      }
     }
+    
+    // Local file path
+    const audioPath = path.join(path.dirname(videoPath), `${path.basename(videoPath, path.extname(videoPath))}.wav`);
+    
+    await execAsync(`ffmpeg -i "${videoPath}" -acodec pcm_s16le -ac 1 -ar 16000 "${audioPath}"`);
+    
+    return audioPath;
+  } catch (error) {
+    console.error('Failed to extract audio:', error);
+    throw new Error(`Audio extraction failed: ${error instanceof Error ? error.message : String(error)}`);
   }
-  
-  // Local file path
-  const audioPath = path.join(path.dirname(videoPath), `${path.basename(videoPath, path.extname(videoPath))}.wav`);
-  
-  await execAsync(`ffmpeg -i "${videoPath}" -acodec pcm_s16le -ac 1 -ar 16000 "${audioPath}"`);
-  
-  return audioPath;
 }
 
 async function getVideoDuration(videoPath: string): Promise<number> {
-  if (videoPath.startsWith('http')) {
-    if (videoPath.includes('youtube.com') || videoPath.includes('youtu.be')) {
-      // YouTube URL - use yt-dlp to get duration
-      const { stdout } = await execAsync(`yt-dlp --get-duration "${videoPath}"`);
-      const durationStr = stdout.trim();
-      
-      // Parse duration string (HH:MM:SS or MM:SS)
-      const parts = durationStr.split(':').reverse();
-      let duration = 0;
-      for (let i = 0; i < parts.length; i++) {
-        duration += parseInt(parts[i]) * Math.pow(60, i);
+  try {
+    if (videoPath.startsWith('http')) {
+      if (videoPath.includes('youtube.com') || videoPath.includes('youtu.be')) {
+        // YouTube URL - use yt-dlp to get duration
+        const { stdout } = await execAsync(`yt-dlp --get-duration "${videoPath}"`);
+        const durationStr = stdout.trim();
+        
+        // Parse duration string (HH:MM:SS or MM:SS)
+        const parts = durationStr.split(':').reverse();
+        let duration = 0;
+        for (let i = 0; i < parts.length; i++) {
+          duration += parseInt(parts[i]) * Math.pow(60, i);
+        }
+        return duration;
+      } else {
+        // S3 URL - download temporarily to get duration
+        const tempVideoPath = path.join(process.cwd(), "uploads", `temp_${Date.now()}.mp4`);
+        
+        await execAsync(`wget -O "${tempVideoPath}" "${videoPath}"`);
+        const { stdout } = await execAsync(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${tempVideoPath}"`);
+        
+        // Clean up temporary file
+        await execAsync(`rm -f "${tempVideoPath}"`).catch(error => {
+          console.error('Error cleaning up temp file:', error);
+        });
+        
+        return parseFloat(stdout.trim());
       }
-      return duration;
-    } else {
-      // S3 URL - download temporarily to get duration
-      const tempVideoPath = path.join(process.cwd(), "uploads", `temp_${Date.now()}.mp4`);
-      
-      await execAsync(`wget -O "${tempVideoPath}" "${videoPath}"`);
-      const { stdout } = await execAsync(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${tempVideoPath}"`);
-      
-      // Clean up temporary file
-      await execAsync(`rm -f "${tempVideoPath}"`).catch(() => {});
-      
-      return parseFloat(stdout.trim());
     }
+    
+    // Local file path
+    const { stdout } = await execAsync(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${videoPath}"`);
+    return parseFloat(stdout.trim());
+  } catch (error) {
+    console.error('Failed to get video duration:', error);
+    throw new Error(`Video duration detection failed: ${error instanceof Error ? error.message : String(error)}`);
   }
-  
-  // Local file path
-  const { stdout } = await execAsync(`ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${videoPath}"`);
-  return parseFloat(stdout.trim());
 }
 
 async function transcribeAudio(audioPath: string) {
@@ -265,6 +279,12 @@ async function transcribeWithOpenAI(audioPath: string) {
     console.log('[OPENAI] File size:', fs.statSync(audioPath).size, 'bytes');
     
     const audioReadStream = fs.createReadStream(audioPath);
+    
+    // Handle stream errors
+    audioReadStream.on('error', (error) => {
+      console.error('[OPENAI] File stream error:', error);
+      throw error;
+    });
     
     console.log('[OPENAI] Sending to OpenAI Whisper API...');
     const transcription = await openai.audio.transcriptions.create({

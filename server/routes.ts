@@ -5,11 +5,11 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { insertVideoSchema } from "@shared/schema";
-import { transcribeVideo } from "./services/transcription";
+import { transcribeVideo } from "./services/transcription-new";
 import { translateText, retranslateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
-import { detectLanguageFromVideo, getSupportedLanguages } from "./services/language-detection";
+import { detectLanguageFromVideo, getSupportedLanguages } from "./services/language-detection-new";
 
 const upload = multer({
   dest: "uploads/",

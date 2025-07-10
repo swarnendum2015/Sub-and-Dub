@@ -619,6 +619,13 @@ async function analyzeVideoWithTimeout(videoId: number) {
   
   try {
     await analyzeVideo(videoId);
+  } catch (error) {
+    console.error(`Background analysis failed for video ${videoId}:`, error);
+    try {
+      await storage.updateVideoStatus(videoId, "failed");
+    } catch (updateError) {
+      console.error(`Failed to update video status after analysis error:`, updateError);
+    }
   } finally {
     clearTimeout(timeout);
   }
@@ -667,6 +674,13 @@ async function processVideoWithTimeout(videoId: number, selectedModels?: string[
   
   try {
     await processVideo(videoId, selectedModels);
+  } catch (error) {
+    console.error(`Background processing failed for video ${videoId}:`, error);
+    try {
+      await storage.updateVideoStatus(videoId, "failed");
+    } catch (updateError) {
+      console.error(`Failed to update video status after processing error:`, updateError);
+    }
   } finally {
     clearTimeout(timeout);
   }

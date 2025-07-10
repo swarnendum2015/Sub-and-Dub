@@ -74,17 +74,35 @@ export async function translateText(transcriptionId: number, targetLanguage: str
   const sourceText = transcription.text;
   
   // Use multiple translation models for confidence scoring
-  const translations = await Promise.all([
-    translateWithOpenAI(sourceText, targetLanguage),
-    translateWithGoogle(sourceText, targetLanguage),
-    translateWithAzure(sourceText, targetLanguage),
-  ]);
+  const translationPromises = [
+    translateWithOpenAI(sourceText, targetLanguage).catch(error => {
+      console.error('OpenAI translation failed:', error);
+      return { text: '', confidence: 0, model: 'openai-failed' };
+    }),
+    translateWithGoogle(sourceText, targetLanguage).catch(error => {
+      console.error('Google translation failed:', error);
+      return { text: '', confidence: 0, model: 'google-failed' };
+    }),
+    translateWithAzure(sourceText, targetLanguage).catch(error => {
+      console.error('Azure translation failed:', error);
+      return { text: '', confidence: 0, model: 'azure-failed' };
+    }),
+  ];
+  
+  const translations = await Promise.all(translationPromises);
+  
+  // Filter out failed translations
+  const validTranslations = translations.filter(t => t.text && t.confidence > 0);
+  
+  if (validTranslations.length === 0) {
+    throw new Error('All translation services failed');
+  }
 
   // Calculate confidence based on agreement between models
-  const confidence = calculateTranslationConfidence(translations);
+  const confidence = calculateTranslationConfidence(validTranslations);
   
   // Use the translation with highest individual confidence
-  const bestTranslation = translations.reduce((best, current) => 
+  const bestTranslation = validTranslations.reduce((best, current) => 
     current.confidence > best.confidence ? current : best
   );
 

@@ -237,6 +237,17 @@ Changelog:
   - Added cultural reference adaptation and natural speech pattern preservation
   - Subtitles display speaker names, confidence scores, and model attribution in real-time
   - Video player now provides complete subtitle experience with professional overlay styling
+
+- July 10, 2025. Critical Error Handling and Language Detection Fixes
+  - Fixed critical language detection bug where Bengali was incorrectly mapped to English ("bengali" → "en")
+  - Enhanced language mapping with comprehensive full name support (bengali/hindi/tamil/etc → proper codes)
+  - Resolved unhandled promise rejections across all frontend React components
+  - Added robust try-catch blocks around Promise.all calls in transcription panels and video player
+  - Enhanced background analysis and processing functions with comprehensive error handling
+  - Fixed translation service Promise.all calls to prevent crashes when individual services fail
+  - Improved API quota handling with graceful fallback logic between OpenAI, Gemini, and Azure
+  - All promise rejections now properly caught and logged for debugging
+  - Application now stable with reliable error recovery and proper status reporting
 ```
 
 ## User Preferences

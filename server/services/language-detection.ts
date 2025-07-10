@@ -103,9 +103,11 @@ export async function detectLanguageFromVideo(videoPath: string): Promise<Langua
     return { language: 'en', confidence: 0.3, languageName: 'English' };
   } finally {
     // Clean up temporary audio file
-    if (audioPath && fs.existsSync(audioPath)) {
+    if (audioPath) {
       try {
-        fs.unlinkSync(audioPath);
+        if (fs.existsSync(audioPath)) {
+          fs.unlinkSync(audioPath);
+        }
       } catch (cleanupError) {
         console.error('Failed to cleanup audio file:', cleanupError);
       }
@@ -117,6 +119,22 @@ async function extractAudioSample(videoPath: string): Promise<string> {
   const outputPath = path.join(path.dirname(videoPath), `lang_detect_${Date.now()}.wav`);
   
   return new Promise((resolve, reject) => {
+    let resolved = false;
+    
+    const handleError = (error: Error) => {
+      if (!resolved) {
+        resolved = true;
+        reject(error);
+      }
+    };
+    
+    const handleSuccess = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve(outputPath);
+      }
+    };
+    
     try {
       const ffmpeg = spawn('ffmpeg', [
         '-i', videoPath,
@@ -131,15 +149,15 @@ async function extractAudioSample(videoPath: string): Promise<string> {
 
       ffmpeg.on('close', (code) => {
         if (code === 0) {
-          resolve(outputPath);
+          handleSuccess();
         } else {
-          reject(new Error(`FFmpeg failed with code ${code}`));
+          handleError(new Error(`FFmpeg failed with code ${code}`));
         }
       });
 
       ffmpeg.on('error', (error) => {
         console.error('FFmpeg process error:', error);
-        reject(error);
+        handleError(error);
       });
 
       ffmpeg.stderr?.on('data', (data) => {
@@ -149,7 +167,7 @@ async function extractAudioSample(videoPath: string): Promise<string> {
       
     } catch (error) {
       console.error('Failed to spawn FFmpeg process:', error);
-      reject(error);
+      handleError(error instanceof Error ? error : new Error(String(error)));
     }
   });
 }
@@ -157,14 +175,13 @@ async function extractAudioSample(videoPath: string): Promise<string> {
 async function detectWithWhisper(audioPath: string): Promise<LanguageDetectionResult | null> {
   let fileStream = null;
   try {
-    // Create file stream with error handling
+    // Verify file exists before creating stream
+    if (!fs.existsSync(audioPath)) {
+      throw new Error(`Audio file not found: ${audioPath}`);
+    }
+
+    // Create file stream
     fileStream = fs.createReadStream(audioPath);
-    
-    // Handle stream errors
-    fileStream.on('error', (error) => {
-      console.error('File stream error:', error);
-      throw error;
-    });
 
     const response = await openai.audio.transcriptions.create({
       file: fileStream,

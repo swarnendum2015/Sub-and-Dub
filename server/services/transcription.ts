@@ -165,7 +165,13 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
   }
 
   // Clean up audio file
-  fs.unlinkSync(audioPath);
+  try {
+    if (fs.existsSync(audioPath)) {
+      fs.unlinkSync(audioPath);
+    }
+  } catch (cleanupError) {
+    console.error('Failed to cleanup audio file:', cleanupError);
+  }
 
   return transcriptions;
 }
@@ -278,13 +284,12 @@ async function transcribeWithOpenAI(audioPath: string) {
     console.log('[OPENAI] Creating audio stream from:', audioPath);
     console.log('[OPENAI] File size:', fs.statSync(audioPath).size, 'bytes');
     
+    // Verify file exists before creating stream
+    if (!fs.existsSync(audioPath)) {
+      throw new Error(`Audio file not found: ${audioPath}`);
+    }
+
     const audioReadStream = fs.createReadStream(audioPath);
-    
-    // Handle stream errors
-    audioReadStream.on('error', (error) => {
-      console.error('[OPENAI] File stream error:', error);
-      throw error;
-    });
     
     console.log('[OPENAI] Sending to OpenAI Whisper API...');
     const transcription = await openai.audio.transcriptions.create({

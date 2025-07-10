@@ -57,38 +57,47 @@ export default function LandingPage() {
       const formData = new FormData();
       formData.append('video', file);
 
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = (event.loaded / event.total) * 100;
-          setUploadProgress(progress);
-        }
-      };
+      const uploadPromise = new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = (event.loaded / event.total) * 100;
+            setUploadProgress(progress);
+          }
+        };
 
-      xhr.onload = async () => {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          const videoId = response.id;
-          
-          toast({
-            title: "Upload successful",
-            description: "Starting video analysis...",
-          });
-          
-          // Navigate to processing status page to show analysis progress
-          setLocation(`/processing/${videoId}`);
-        } else {
-          throw new Error(xhr.responseText);
-        }
-      };
+        xhr.onload = () => {
+          try {
+            if (xhr.status === 200) {
+              const response = JSON.parse(xhr.responseText);
+              const videoId = response.id;
+              
+              toast({
+                title: "Upload successful",
+                description: "Starting video analysis...",
+              });
+              
+              // Navigate to processing status page to show analysis progress
+              setLocation(`/processing/${videoId}`);
+              resolve();
+            } else {
+              reject(new Error(xhr.responseText || `HTTP ${xhr.status}`));
+            }
+          } catch (error) {
+            reject(error);
+          }
+        };
 
-      xhr.onerror = () => {
-        throw new Error("Upload failed");
-      };
+        xhr.onerror = () => {
+          reject(new Error("Network error during upload"));
+        };
 
-      xhr.open('POST', '/api/videos/upload');
-      xhr.send(formData);
+        xhr.open('POST', '/api/videos/upload');
+        xhr.send(formData);
+      });
+
+      await uploadPromise;
     } catch (error) {
       toast({
         title: "Upload failed",
@@ -115,13 +124,17 @@ export default function LandingPage() {
         body: JSON.stringify({ s3Url }),
       });
       
-      if (!response.ok) throw new Error('Failed to process S3 video');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to process S3 video');
+      }
       
       const data = await response.json();
       if (data.videoId) {
         setLocation(`/processing/${data.videoId}`);
       }
     } catch (error) {
+      console.error('S3 upload error:', error);
       toast({
         title: "S3 Upload Failed",
         description: error instanceof Error ? error.message : "Failed to process S3 video",
@@ -138,13 +151,17 @@ export default function LandingPage() {
         body: JSON.stringify({ youtubeUrl }),
       });
       
-      if (!response.ok) throw new Error('Failed to process YouTube video');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to process YouTube video');
+      }
       
       const data = await response.json();
       if (data.videoId) {
         setLocation(`/processing/${data.videoId}`);
       }
     } catch (error) {
+      console.error('YouTube upload error:', error);
       toast({
         title: "YouTube Upload Failed",
         description: error instanceof Error ? error.message : "Failed to process YouTube video",

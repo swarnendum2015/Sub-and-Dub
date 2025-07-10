@@ -78,8 +78,11 @@ export function EditableTranscriptionPanel({
       });
       
       try {
-        const allTranslations = await Promise.all(translationPromises);
-        return allTranslations.flat();
+        const translationResults = await Promise.allSettled(translationPromises);
+        return translationResults
+          .filter(result => result.status === 'fulfilled')
+          .map(result => (result as PromiseFulfilledResult<any[]>).value)
+          .flat();
       } catch (error) {
         console.error('Error fetching translations:', error);
         return [];

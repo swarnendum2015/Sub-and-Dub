@@ -74,8 +74,10 @@ export function VideoPlayer({ videoId, currentTime, onTimeUpdate }: VideoPlayerP
       });
       
       try {
-        const translations = await Promise.all(translationPromises);
-        return translations.filter(Boolean);
+        const translationResults = await Promise.allSettled(translationPromises);
+        return translationResults
+          .filter(result => result.status === 'fulfilled' && result.value)
+          .map(result => (result as PromiseFulfilledResult<any>).value);
       } catch (error) {
         console.error('Error fetching translations:', error);
         return [];

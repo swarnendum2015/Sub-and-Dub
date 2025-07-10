@@ -52,19 +52,33 @@ function WorkspaceContent() {
       
       const translationsMap: Record<number, any> = {};
       
-      for (const transcription of transcriptions) {
+      // Use Promise.allSettled to handle all requests safely
+      const translationPromises = transcriptions.map(async (transcription) => {
         try {
           const response = await fetch(`/api/transcriptions/${transcription.id}/translations`);
           if (response.ok) {
             const translations = await response.json();
             const englishTranslation = translations.find((t: any) => t.targetLanguage === 'en');
             if (englishTranslation) {
-              translationsMap[transcription.id] = englishTranslation;
+              return { id: transcription.id, translation: englishTranslation };
             }
           }
+          return null;
         } catch (error) {
           console.error(`Failed to fetch translation for transcription ${transcription.id}:`, error);
+          return null;
         }
+      });
+      
+      try {
+        const results = await Promise.allSettled(translationPromises);
+        results.forEach(result => {
+          if (result.status === 'fulfilled' && result.value) {
+            translationsMap[result.value.id] = result.value.translation;
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching translations:', error);
       }
       
       return translationsMap;

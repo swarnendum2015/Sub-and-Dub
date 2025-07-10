@@ -82,11 +82,8 @@ export default function ServiceSelectionPage() {
       targetLanguages: string[];
       sourceLanguage: string;
     }) => {
-      return await apiRequest(`/api/videos/${videoId}/select-services`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest("POST", `/api/videos/${videoId}/select-services`, data);
+      return response.json();
     },
     onSuccess: () => {
       toast({

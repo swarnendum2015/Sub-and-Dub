@@ -16,10 +16,11 @@ export default function LandingPage() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Fetch existing videos
-  const { data: videos } = useQuery({
+  // Fetch existing videos with aggressive refresh for real-time updates
+  const { data: videos, refetch: refetchVideos } = useQuery({
     queryKey: ['/api/videos'],
-    refetchInterval: 5000,
+    refetchInterval: 1000, // Refresh every second
+    staleTime: 0, // Always consider data stale
   });
   
   // Sort videos by most recent
@@ -79,8 +80,10 @@ export default function LandingPage() {
                 description: "Starting video analysis...",
               });
               
-              // Navigate to processing status page to show analysis progress
-              setLocation(`/processing/${videoId}`);
+              // Stay on landing page to show integrated status
+              setIsUploading(false);
+              setUploadProgress(0);
+              refetchVideos(); // Force refresh video list
               resolve();
             } else {
               reject(new Error(xhr.responseText || `HTTP ${xhr.status}`));
@@ -278,7 +281,7 @@ export default function LandingPage() {
                           title: "Processing restarted",
                           description: "Video processing has been restarted.",
                         });
-                        mutate(); // Refresh video list
+                        refetchVideos(); // Refresh video list
                       })
                       .catch(console.error);
                   }}
@@ -297,7 +300,7 @@ export default function LandingPage() {
                         title: "Transcription started",
                         description: "Bengali transcription is now processing.",
                       });
-                      mutate(); // Refresh video list
+                      refetchVideos(); // Refresh video list
                     })
                     .catch(console.error);
                   }}

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { UploadZone } from "@/components/upload-zone";
+import { VideoStatusCard } from "@/components/video-status-card";
 import { CloudUpload, MessageSquare, FileVideo, CheckCircle, Clock, AlertCircle, Calendar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -261,93 +262,51 @@ export default function LandingPage() {
         
 
         
-        {/* Existing Videos */}
+        {/* Your Videos with Integrated Processing Status */}
         {sortedVideos.length > 0 && (
           <div className="mt-12">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">Recent Videos</h3>
-            <div className="space-y-3">
+            <h3 className="text-xl font-bold text-slate-900 mb-6">Your Videos</h3>
+            <div className="space-y-4">
               {sortedVideos.slice(0, 5).map((video: any) => (
-                <Card 
+                <VideoStatusCard 
                   key={video.id} 
-                  className="cursor-pointer hover:border-primary transition-colors"
-                  onClick={() => {
-                    if (video.status === 'completed') {
-                      setLocation(`/processing/${video.id}`);
-                    } else if (video.status === 'processing') {
-                      setLocation(`/processing/${video.id}`);
-                    } else if (video.status === 'failed') {
-                      toast({
-                        title: "Video processing failed",
-                        description: "Click to retry processing this video.",
-                        variant: "destructive",
-                      });
-                      // Retry the failed video
-                      fetch(`/api/videos/${video.id}/retry`, { method: 'POST' })
-                        .then(() => setLocation(`/processing/${video.id}`))
-                        .catch(console.error);
-                    } else {
-                      toast({
-                        title: "Video not ready",
-                        description: "This video is still being uploaded.",
-                        variant: "destructive",
-                      });
-                    }
+                  video={video}
+                  onRetry={(videoId) => {
+                    fetch(`/api/videos/${videoId}/retry`, { method: 'POST' })
+                      .then(() => {
+                        toast({
+                          title: "Processing restarted",
+                          description: "Video processing has been restarted.",
+                        });
+                        mutate(); // Refresh video list
+                      })
+                      .catch(console.error);
                   }}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <FileVideo className="w-5 h-5 text-slate-500" />
-                        <div>
-                          <p className="font-medium text-slate-900">
-                            {video.originalName || video.filename}
-                          </p>
-                          <div className="flex items-center gap-3 text-sm text-slate-500">
-                            <span>Video ID: {video.id}</span>
-                            {video.createdAt && (
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(video.createdAt).toLocaleString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {video.status === 'completed' && (
-                          <>
-                            <Badge variant="default" className="gap-1">
-                              <CheckCircle className="w-3 h-3" />
-                              Completed
-                            </Badge>
-                          </>
-                        )}
-                        {video.status === 'processing' && (
-                          <Badge variant="secondary" className="gap-1">
-                            <Clock className="w-3 h-3" />
-                            Processing
-                          </Badge>
-                        )}
-                        {video.status === 'failed' && (
-                          <Badge variant="destructive" className="gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            Failed
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  onStartTranscription={(videoId) => {
+                    fetch(`/api/videos/${videoId}/select-services`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        services: ['transcription'],
+                        models: ['openai-whisper'],
+                        targetLanguages: ['en', 'hi']
+                      })
+                    })
+                    .then(() => {
+                      toast({
+                        title: "Transcription started",
+                        description: "Bengali transcription is now processing.",
+                      });
+                      mutate(); // Refresh video list
+                    })
+                    .catch(console.error);
+                  }}
+                  onViewWorkspace={(videoId) => {
+                    setLocation(`/processing/${videoId}`);
+                  }}
+                />
               ))}
             </div>
-            
-
           </div>
         )}
       </main>

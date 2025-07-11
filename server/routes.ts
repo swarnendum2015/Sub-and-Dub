@@ -643,11 +643,8 @@ async function analyzeVideo(videoId: number) {
     
     console.log(`[ANALYZE] Analysis completed for video ${videoId}. Detected language: ${languageResult.languageName} (${languageResult.confidence})`);
     
-    // Auto-start transcription processing after analysis
-    console.log(`[ANALYZE] Auto-starting transcription for video ${videoId}`);
-    processVideoWithTimeout(videoId, ["openai-whisper"]).catch(error => {
-      console.error(`Failed to auto-start processing for video ${videoId}:`, error);
-    });
+    // Analysis complete - ready for manual transcription trigger
+    console.log(`[ANALYZE] Analysis completed. Ready for manual transcription trigger.`);
     
   } catch (error) {
     console.error(`[ANALYZE] Analysis error for video ${videoId}:`, error);

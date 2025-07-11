@@ -269,6 +269,16 @@ Changelog:
   - Fixed video processing pipeline to handle API failures gracefully without breaking upload
   - Verified complete workflow: upload → analysis → transcription → processing complete
   - System now processes videos successfully even when Gemini API quota is exceeded
+
+- July 11, 2025. Integrated Processing Status and Manual Transcription Control
+  - Removed confusing intermediate processing screen and integrated status into main landing page
+  - Created VideoStatusCard component with detailed status information and action buttons
+  - Restored manual transcription trigger - users must press "Start Transcription" button after analysis
+  - Added comprehensive status messages for each processing stage (analyzing, analyzed, processing, completed, failed)
+  - Enhanced error handling with timeout management and retry functionality
+  - Implemented proper workflow: upload → analysis → manual transcription trigger → transcription → workspace
+  - Added visual status indicators with color-coded badges and progress descriptions
+  - System now provides clear control over when transcription begins, matching user requirements
 ```
 
 ## User Preferences

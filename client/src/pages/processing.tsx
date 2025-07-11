@@ -388,16 +388,13 @@ export default function ProcessingPage() {
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Analysis Complete</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Analysis Complete - Starting Transcription</h3>
                   <p className="text-gray-600 mb-4">
-                    Your video has been analyzed. You can now select transcription and translation services.
+                    Your video has been analyzed and transcription is starting automatically. This will take a few moments.
                   </p>
                   <div className="flex justify-center space-x-3">
-                    <Button onClick={handleSelectServices}>
-                      Select Services
-                    </Button>
                     <Button onClick={handleProceedToWorkspace} variant="outline">
-                      Skip to Workspace
+                      View Progress in Workspace
                     </Button>
                   </div>
                 </div>

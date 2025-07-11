@@ -627,12 +627,14 @@ async function analyzeVideo(videoId: number) {
     
     // Detect source language with fallback
     console.log(`[ANALYZE] Detecting language for video ${videoId}`);
+    let languageResult;
     try {
-      const languageResult = await detectLanguageFromVideo(video.filePath);
+      languageResult = await detectLanguageFromVideo(video.filePath);
       await storage.updateVideoSourceLanguage(videoId, languageResult.language, languageResult.confidence);
     } catch (languageError) {
       console.error(`[ANALYZE] Language detection failed, using Bengali default:`, languageError);
       // Default to Bengali if detection fails
+      languageResult = { language: 'bn', confidence: 0.7, languageName: 'Bengali' };
       await storage.updateVideoSourceLanguage(videoId, 'bn', 0.7);
     }
     

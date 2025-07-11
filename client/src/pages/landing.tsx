@@ -190,11 +190,42 @@ export default function LandingPage() {
       <main className="max-w-2xl mx-auto px-6 py-20">
         <div className="text-center mb-12">
           <h2 className="text-2xl font-bold text-slate-900 mb-3">
-            Upload Video
+            Upload Video for Professional Subtitling
           </h2>
-          <p className="text-slate-600">
-            Upload your video to start analysis, transcription, and translation
+          <p className="text-slate-600 mb-6">
+            Upload your video to start Hollywood-grade transcription and translation
           </p>
+          
+          {/* Step-by-step guide */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 text-left">
+            <h3 className="font-semibold text-blue-900 mb-4">How it works:</h3>
+            <div className="space-y-3 text-sm text-blue-800">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">1</div>
+                <div>
+                  <strong>Upload:</strong> Select your video file (MP4, MOV, AVI, MKV - max 500MB)
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">2</div>
+                <div>
+                  <strong>Processing:</strong> View real-time status as we analyze your video and detect language
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">3</div>
+                <div>
+                  <strong>Transcription:</strong> Get studio-grade transcription with confidence scores and model attribution
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-semibold">4</div>
+                <div>
+                  <strong>Translation:</strong> Netflix-compliant subtitles with international broadcast standards
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Upload Section */}

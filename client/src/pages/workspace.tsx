@@ -152,14 +152,30 @@ function WorkspaceContent() {
 
   const processingStatus = getProcessingStatus();
 
-  // Show processing screen for videos in processing or failed state
-  if (video?.status === 'processing' || (video?.status === 'failed' && transcriptions?.length === 0)) {
+  // Show processing screen only for videos still in processing state without transcriptions
+  if (video?.status === 'processing' && (!transcriptions || transcriptions.length === 0)) {
     return (
       <ProcessingScreen 
         videoId={videoId!} 
         videoName={video.originalName}
         onRetry={() => retryProcessingMutation.mutate()}
       />
+    );
+  }
+
+  // Show error state for failed videos
+  if (video?.status === 'failed' && (!transcriptions || transcriptions.length === 0)) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Card className="w-full max-w-md mx-4">
+          <CardContent className="pt-6 text-center">
+            <p className="text-slate-600 mb-4">Processing failed. Please try again.</p>
+            <Button onClick={() => retryProcessingMutation.mutate()}>
+              Retry Processing
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -175,7 +191,18 @@ function WorkspaceContent() {
               </div>
               <span className="font-medium text-slate-900">SubtitlePro</span>
             </div>
-            <span className="text-sm text-slate-600 truncate max-w-md">{video?.originalName || 'Untitled'}</span>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-slate-600 truncate max-w-md">{video?.originalName || 'Untitled'}</span>
+              {video && (
+                <div className="flex items-center space-x-3 text-xs text-slate-500">
+                  <span>{(video.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+                  {video.duration && (
+                    <span>{Math.floor(video.duration / 60)}:{String(Math.floor(video.duration % 60)).padStart(2, '0')}</span>
+                  )}
+                  <span>Bengali</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center space-x-3">

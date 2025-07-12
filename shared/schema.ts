@@ -59,6 +59,22 @@ export const dubbingJobs = pgTable("dubbing_jobs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const fileDetails = pgTable("file_details", {
+  id: serial("id").primaryKey(),
+  videoId: integer("video_id").references(() => videos.id),
+  codec: text("codec"),
+  resolution: text("resolution"), // e.g., "1920x1080"
+  fps: real("fps"),
+  bitrate: integer("bitrate"),
+  audioCodec: text("audio_codec"),
+  audioSampleRate: integer("audio_sample_rate"),
+  audioChannels: integer("audio_channels"),
+  extractedAudioPath: text("extracted_audio_path"),
+  thumbnailPath: text("thumbnail_path"),
+  metadataJson: text("metadata_json"), // Full ffprobe output
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertVideoSchema = createInsertSchema(videos).omit({
   id: true,
   createdAt: true,
@@ -79,10 +95,16 @@ export const insertDubbingJobSchema = createInsertSchema(dubbingJobs).omit({
   createdAt: true,
 });
 
+export const insertFileDetailsSchema = createInsertSchema(fileDetails).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Relations
-export const videosRelations = relations(videos, ({ many }) => ({
+export const videosRelations = relations(videos, ({ many, one }) => ({
   transcriptions: many(transcriptions),
   dubbingJobs: many(dubbingJobs),
+  fileDetails: one(fileDetails),
 }));
 
 export const transcriptionsRelations = relations(transcriptions, ({ one, many }) => ({
@@ -107,6 +129,13 @@ export const dubbingJobsRelations = relations(dubbingJobs, ({ one }) => ({
   }),
 }));
 
+export const fileDetailsRelations = relations(fileDetails, ({ one }) => ({
+  video: one(videos, {
+    fields: [fileDetails.videoId],
+    references: [videos.id],
+  }),
+}));
+
 export type Video = typeof videos.$inferSelect;
 export type InsertVideo = z.infer<typeof insertVideoSchema>;
 export type Transcription = typeof transcriptions.$inferSelect;
@@ -115,3 +144,5 @@ export type Translation = typeof translations.$inferSelect;
 export type InsertTranslation = z.infer<typeof insertTranslationSchema>;
 export type DubbingJob = typeof dubbingJobs.$inferSelect;
 export type InsertDubbingJob = z.infer<typeof insertDubbingJobSchema>;
+export type FileDetails = typeof fileDetails.$inferSelect;
+export type InsertFileDetails = z.infer<typeof insertFileDetailsSchema>;

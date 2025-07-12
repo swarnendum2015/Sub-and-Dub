@@ -92,6 +92,12 @@ function WorkspaceContent() {
     enabled: !!videoId,
   });
 
+  // Fetch file details for the video
+  const { data: fileDetails } = useQuery({
+    queryKey: ['/api/videos', videoId, 'details'],
+    enabled: !!videoId,
+  });
+
   // Retry processing mutation - must be declared before any conditional returns
   const retryProcessingMutation = useMutation({
     mutationFn: async () => {
@@ -297,6 +303,26 @@ function WorkspaceContent() {
                           <span>Status:</span>
                           <span className="capitalize">{video.status}</span>
                         </div>
+                        {fileDetails && (
+                          <>
+                            <div className="flex justify-between">
+                              <span>Format:</span>
+                              <span className="uppercase">{fileDetails.codec}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Resolution:</span>
+                              <span>{fileDetails.resolution}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Frame Rate:</span>
+                              <span>{fileDetails.fps?.toFixed(0)} fps</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Audio:</span>
+                              <span className="uppercase">{fileDetails.audioCodec} {fileDetails.audioSampleRate ? `${Math.round(fileDetails.audioSampleRate/1000)}kHz` : ''}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}

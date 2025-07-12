@@ -3,6 +3,7 @@ import {
   transcriptions, 
   translations, 
   dubbingJobs,
+  fileDetails,
   type Video, 
   type InsertVideo,
   type Transcription,
@@ -10,7 +11,9 @@ import {
   type Translation,
   type InsertTranslation,
   type DubbingJob,
-  type InsertDubbingJob
+  type InsertDubbingJob,
+  type FileDetails,
+  type InsertFileDetails
 } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -43,6 +46,10 @@ export interface IStorage {
   getDubbingJobsByVideoId(videoId: number): Promise<DubbingJob[]>;
   getDubbingJob(id: number): Promise<DubbingJob | undefined>;
   updateDubbingJobStatus(id: number, status: string, audioPath?: string): Promise<void>;
+  
+  // File details operations
+  createFileDetails(fileDetailsData: InsertFileDetails): Promise<FileDetails>;
+  getFileDetailsByVideoId(videoId: number): Promise<FileDetails | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -172,6 +179,22 @@ export class DatabaseStorage implements IStorage {
     if (audioPath) updateData.audioPath = audioPath;
     await db.update(dubbingJobs).set(updateData).where(eq(dubbingJobs.id, id));
   }
+
+  async createFileDetails(fileDetailsData: InsertFileDetails): Promise<FileDetails> {
+    const [details] = await db
+      .insert(fileDetails)
+      .values(fileDetailsData)
+      .returning();
+    return details;
+  }
+
+  async getFileDetailsByVideoId(videoId: number): Promise<FileDetails | undefined> {
+    const [details] = await db
+      .select()
+      .from(fileDetails)
+      .where(eq(fileDetails.videoId, videoId));
+    return details || undefined;
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -179,11 +202,13 @@ export class MemStorage implements IStorage {
   private transcriptions: Map<number, Transcription> = new Map();
   private translations: Map<number, Translation> = new Map();
   private dubbingJobs: Map<number, DubbingJob> = new Map();
+  private fileDetails: Map<number, FileDetails> = new Map();
   
   private currentVideoId = 1;
   private currentTranscriptionId = 1;
   private currentTranslationId = 1;
   private currentDubbingJobId = 1;
+  private currentFileDetailsId = 1;
 
   async createVideo(insertVideo: InsertVideo): Promise<Video> {
     const video: Video = {
@@ -372,6 +397,31 @@ export class MemStorage implements IStorage {
       this.dubbingJobs.set(id, dubbingJob);
     }
   }
+
+  async createFileDetails(fileDetailsData: InsertFileDetails): Promise<FileDetails> {
+    const details: FileDetails = {
+      ...fileDetailsData,
+      id: this.currentFileDetailsId++,
+      videoId: fileDetailsData.videoId || null,
+      codec: fileDetailsData.codec || null,
+      resolution: fileDetailsData.resolution || null,
+      fps: fileDetailsData.fps || null,
+      bitrate: fileDetailsData.bitrate || null,
+      audioCodec: fileDetailsData.audioCodec || null,
+      audioSampleRate: fileDetailsData.audioSampleRate || null,
+      audioChannels: fileDetailsData.audioChannels || null,
+      extractedAudioPath: fileDetailsData.extractedAudioPath || null,
+      thumbnailPath: fileDetailsData.thumbnailPath || null,
+      metadataJson: fileDetailsData.metadataJson || null,
+      createdAt: new Date(),
+    };
+    this.fileDetails.set(details.id, details);
+    return details;
+  }
+
+  async getFileDetailsByVideoId(videoId: number): Promise<FileDetails | undefined> {
+    return Array.from(this.fileDetails.values()).find(d => d.videoId === videoId) || undefined;
+  }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

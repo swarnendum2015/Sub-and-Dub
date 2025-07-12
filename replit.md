@@ -279,6 +279,16 @@ Changelog:
   - Implemented proper workflow: upload → analysis → manual transcription trigger → transcription → workspace
   - Added visual status indicators with color-coded badges and progress descriptions
   - System now provides clear control over when transcription begins, matching user requirements
+
+- July 12, 2025. Critical Status Synchronization and FileDetails Infrastructure
+  - Fixed critical bug where upload page showed "Ready" but workspace showed "Processing/Uploading"
+  - Added FileDetails database table with comprehensive video metadata (codec, resolution, fps, audio specs)
+  - Created file details API endpoints: /api/videos/:id/status and /api/videos/:id/details
+  - Implemented automatic file details generation using ffprobe after successful transcription
+  - Enhanced workspace UI to display video format, resolution, frame rate, and audio specifications
+  - Fixed workspace status display logic - completed videos with transcriptions now show proper workspace
+  - Added real-time file details display in workspace sidebar with technical specifications
+  - System now provides complete video metadata synchronization between upload and workspace interfaces
 ```
 
 ## User Preferences

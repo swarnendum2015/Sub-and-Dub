@@ -10,6 +10,10 @@ import { translateText, retranslateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
 import { detectLanguageFromVideo, getSupportedLanguages } from "./services/language-detection-new";
+import { promisify } from 'util';
+import { exec } from 'child_process';
+
+const execAsync = promisify(exec);
 
 const upload = multer({
   dest: "uploads/",
@@ -61,6 +65,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(videos);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch videos", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Get video by ID
+  app.get("/api/videos/:id", async (req, res) => {
+    try {
+      const video = await storage.getVideo(parseInt(req.params.id));
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      res.json(video);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch video", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Get video status
+  app.get("/api/videos/:id/status", async (req, res) => {
+    try {
+      const video = await storage.getVideo(parseInt(req.params.id));
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      res.json({ 
+        id: video.id, 
+        status: video.status, 
+        duration: video.duration,
+        sourceLanguage: video.sourceLanguage,
+        bengaliConfirmed: video.bengaliConfirmed 
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch video status", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Get video file details
+  app.get("/api/videos/:id/details", async (req, res) => {
+    try {
+      const details = await storage.getFileDetailsByVideoId(parseInt(req.params.id));
+      res.json(details || null);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch file details", error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  // Create file details for existing video (admin endpoint)
+  app.post("/api/videos/:id/create-file-details", async (req, res) => {
+    try {
+      const video = await storage.getVideo(parseInt(req.params.id));
+      if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+      }
+      
+      await createFileDetails(video);
+      const details = await storage.getFileDetailsByVideoId(video.id);
+      res.json(details);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create file details", error: error instanceof Error ? error.message : "Unknown error" });
     }
   });
 
@@ -694,6 +756,12 @@ async function processVideo(videoId: number, selectedModels?: string[]) {
       throw transcribeError;
     }
     
+    // Create file details after successful transcription
+    const video = await storage.getVideo(videoId);
+    if (video) {
+      await createFileDetails(video);
+    }
+    
     // DO NOT generate translations automatically
     // Translations will only happen after user confirms Bengali transcription
     console.log(`[PROCESS] Video transcription completed. Waiting for user confirmation before translation.`);
@@ -716,5 +784,42 @@ async function processVideo(videoId: number, selectedModels?: string[]) {
     
     await storage.updateVideoStatus(videoId, "failed");
     // Store error in video metadata (we'll need to add this field)
+  }
+}
+
+// Create file details for a video
+async function createFileDetails(video: any) {
+  try {
+    console.log(`[FILE_DETAILS] Creating file details for video ${video.id}`);
+    
+    // Get video metadata using ffprobe
+    const { stdout } = await execAsync(`ffprobe -v quiet -print_format json -show_format -show_streams "${video.filePath}"`);
+    const metadata = JSON.parse(stdout);
+    
+    // Find video stream
+    const videoStream = metadata.streams.find((s: any) => s.codec_type === 'video');
+    const audioStream = metadata.streams.find((s: any) => s.codec_type === 'audio');
+    
+    // Extract audio path (constructed from video path)
+    const audioPath = `${video.filePath}.wav`;
+    
+    // Create file details record
+    await storage.createFileDetails({
+      videoId: video.id,
+      codec: videoStream?.codec_name || null,
+      resolution: videoStream ? `${videoStream.width}x${videoStream.height}` : null,
+      fps: videoStream?.r_frame_rate ? parseFloat(videoStream.r_frame_rate.split('/')[0]) / parseFloat(videoStream.r_frame_rate.split('/')[1]) : null,
+      bitrate: videoStream?.bit_rate ? parseInt(videoStream.bit_rate) : null,
+      audioCodec: audioStream?.codec_name || null,
+      audioSampleRate: audioStream?.sample_rate ? parseInt(audioStream.sample_rate) : null,
+      audioChannels: audioStream?.channels || null,
+      extractedAudioPath: audioPath,
+      thumbnailPath: null,
+      metadataJson: JSON.stringify(metadata),
+    });
+    
+    console.log(`[FILE_DETAILS] File details created for video ${video.id}`);
+  } catch (error) {
+    console.error(`[FILE_DETAILS] Failed to create file details for video ${video.id}:`, error);
   }
 }

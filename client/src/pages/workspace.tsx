@@ -92,10 +92,12 @@ function WorkspaceContent() {
     enabled: !!videoId,
   });
 
-  // Fetch file details for the video
-  const { data: fileDetails } = useQuery({
+  // Fetch file details for the video - auto-fetch when video is completed
+  const { data: fileDetails, isLoading: fileDetailsLoading } = useQuery({
     queryKey: ['/api/videos', videoId, 'details'],
-    enabled: !!videoId,
+    enabled: !!videoId && video?.status === 'completed',
+    refetchInterval: video?.status === 'completed' ? 5000 : false,
+    staleTime: 0,
   });
 
   // Retry processing mutation - must be declared before any conditional returns
@@ -109,15 +111,19 @@ function WorkspaceContent() {
   });
 
   const getProcessingStatus = () => {
-    if (!video) return { status: "loading", color: "bg-gray-100 text-gray-700" };
+    if (!video) return { status: "Loading...", color: "bg-gray-100 text-gray-700" };
     
     switch (video.status) {
       case "completed":
-        return { status: "Processing Complete", color: "bg-green-100 text-green-700" };
+        return { status: "Ready", color: "bg-green-100 text-green-700" };
       case "processing":
-        return { status: "Processing", color: "bg-blue-100 text-blue-700" };
+        return { status: "Processing Video", color: "bg-blue-100 text-blue-700" };
+      case "transcribing":
+        return { status: "Transcribing", color: "bg-purple-100 text-purple-700" };
       case "failed":
         return { status: "Processing Failed", color: "bg-red-100 text-red-700" };
+      case "analyzed":
+        return { status: "Ready for Transcription", color: "bg-yellow-100 text-yellow-700" };
       default:
         return { status: "Uploaded", color: "bg-gray-100 text-gray-700" };
     }
@@ -303,23 +309,44 @@ function WorkspaceContent() {
                           <span>Status:</span>
                           <span className="capitalize">{video.status}</span>
                         </div>
-                        {fileDetails && (
+                        
+                        {/* File Details Section */}
+                        {video.status === 'completed' && (
                           <>
-                            <div className="flex justify-between">
-                              <span>Format:</span>
-                              <span className="uppercase">{fileDetails.codec}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Resolution:</span>
-                              <span>{fileDetails.resolution}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Frame Rate:</span>
-                              <span>{fileDetails.fps?.toFixed(0)} fps</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Audio:</span>
-                              <span className="uppercase">{fileDetails.audioCodec} {fileDetails.audioSampleRate ? `${Math.round(fileDetails.audioSampleRate/1000)}kHz` : ''}</span>
+                            <div className="border-t pt-2 mt-3">
+                              <h4 className="text-xs font-medium text-slate-900 mb-2">Technical Details</h4>
+                              {fileDetailsLoading ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 border border-slate-300 border-t-transparent rounded-full animate-spin"></div>
+                                  <span className="text-xs text-slate-500">Loading file details...</span>
+                                </div>
+                              ) : fileDetails ? (
+                                <>
+                                  <div className="flex justify-between">
+                                    <span>Format:</span>
+                                    <span className="uppercase">{fileDetails.codec || 'Unknown'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Resolution:</span>
+                                    <span>{fileDetails.resolution || 'Unknown'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Frame Rate:</span>
+                                    <span>{fileDetails.fps ? `${fileDetails.fps.toFixed(0)} fps` : 'Unknown'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Audio:</span>
+                                    <span className="uppercase">
+                                      {fileDetails.audioCodec || 'Unknown'} 
+                                      {fileDetails.audioSampleRate ? ` ${Math.round(fileDetails.audioSampleRate/1000)}kHz` : ''}
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-slate-500">
+                                  No file details available. The system may still be generating metadata.
+                                </div>
+                              )}
                             </div>
                           </>
                         )}

@@ -1,0 +1,36 @@
+```
+🔧 Bug: Workspace still shows “Processing Video” and Video Details panel is empty after status is “Ready”
+
+**Context**  
+- After upload and post‐processing complete, the Landing page shows the video card as “Ready.”  
+- Clicking “View Workspace” navigates to `/workspace/:id`, but the header reads “Processing Video” and the Video Details table remains blank (no file size, duration, codec, etc.).
+
+**Expected Behavior**  
+1. As soon as `/api/videos/:id/status` returns `completed` (or “Ready”), the Workspace header should switch to “Ready” or “Completed.”  
+2. The frontend should automatically fetch `/api/videos/:id/details` (or `/api/videos/:id/file-details`) and render the returned record in the Video Details panel.
+
+**Steps to Fix**  
+1. **Status-to-UI Sync**  
+   - In the Workspace React component, add a useEffect (or TanStack Query subscription) watching the status field.  
+   - When status transitions from `processing` → `completed`, update the header text accordingly.
+
+2. **Auto-Fetch Details**  
+   - After detecting `completed`, trigger a TanStack Query to fetch `/api/videos/:id/details`.  
+   - Ensure the query key includes the video ID and status so it re-fetches when status changes.
+
+3. **Backend Endpoint**  
+   - Verify or implement `/api/videos/:id/details` to return the FileDetails record (size, duration, audioPath, format, codec).  
+   - If no record exists, backfill from the stored metadata and return a default structure.
+
+4. **UI Rendering**  
+   - In the Video Details panel, render a loading placeholder until data arrives.  
+   - If the fetch returns an empty object, display “No file details available—please retry” and log a warning.
+
+5. **Error Logging**  
+   - On details fetch failure, catch the error and send it to `/api/videos/:id/logs` with `{ step: "details-fetch", error }`.
+
+**Deliverables**  
+- React: Update Workspace component’s status watcher and details Query hook.  
+- Express/Drizzle: Confirm details endpoint returns proper JSON.  
+- UI: Add loading state and empty-state messaging in Video Details panel.
+```

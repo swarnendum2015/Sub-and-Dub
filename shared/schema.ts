@@ -18,6 +18,9 @@ export const videos = pgTable("videos", {
   selectedServices: text("selected_services"), // JSON array: ["transcription", "translation", "dubbing"]
   selectedModels: text("selected_models"), // JSON array: ["openai", "gemini", "elevenlabs"]
   targetLanguages: text("target_languages"), // JSON array: ["en", "hi", "ta", "te", "ml"]
+  errorCode: text("error_code"), // Error classification code
+  errorMessage: text("error_message"), // User-friendly error message
+  isRetryable: boolean("is_retryable").default(true), // Whether error is retryable
   createdAt: timestamp("created_at").defaultNow(),
 });
 

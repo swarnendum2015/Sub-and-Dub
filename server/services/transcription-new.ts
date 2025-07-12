@@ -73,12 +73,13 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
         for (const stdSegment of standardizedSegments) {
           const transcription = await storage.createTranscription({
             videoId: videoId,
+            language: 'bn', // Bengali transcription
             text: stdSegment.text,
             startTime: stdSegment.startTime,
             endTime: stdSegment.endTime,
             confidence: enhancedConfidence,
-            model: 'openai-whisper',
-            isAlternative: false
+            modelSource: 'openai-whisper',
+            isOriginal: true
           });
           transcriptions.push(transcription);
         }
@@ -87,12 +88,13 @@ export async function transcribeVideo(videoId: number, selectedModels?: string[]
       // Create single transcription if no segments
       const transcription = await storage.createTranscription({
         videoId: videoId,
+        language: 'bn', // Bengali transcription
         text: transcriptionResult.text || 'No transcription available',
         startTime: 0,
         endTime: duration,
         confidence: 0.75, // Lower confidence for non-segmented output
-        model: 'openai-whisper',
-        isAlternative: false
+        modelSource: 'openai-whisper',
+        isOriginal: true
       });
       transcriptions.push(transcription);
     }
@@ -227,6 +229,156 @@ async function transcribeAudio(audioPath: string) {
     
     // For now, throw the error - in future we could add fallback to other services
     throw new Error(`Transcription failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// Gemini transcription fallback
+async function transcribeWithGemini(audioPath: string) {
+  console.log('[TRANSCRIPTION] Starting Gemini transcription');
+  
+  try {
+    // Placeholder for Gemini transcription - would need Gemini API integration
+    throw new Error('Gemini transcription not implemented yet');
+  } catch (error) {
+    console.error('[TRANSCRIPTION] Gemini transcription failed:', error);
+    throw error;
+  }
+}
+
+// ElevenLabs transcription fallback
+async function transcribeWithElevenLabs(audioPath: string) {
+  console.log('[TRANSCRIPTION] Starting ElevenLabs transcription');
+  
+  try {
+    // Placeholder for ElevenLabs transcription - would need ElevenLabs API integration
+    throw new Error('ElevenLabs transcription not implemented yet');
+  } catch (error) {
+    console.error('[TRANSCRIPTION] ElevenLabs transcription failed:', error);
+    throw error;
+  }
+}
+
+// Fallback transcription function for quota exceeded scenarios
+export async function transcribeVideoFallback(videoId: number) {
+  console.log(`[TRANSCRIPTION FALLBACK] Starting fallback transcription for video ${videoId}`);
+  
+  try {
+    const video = await storage.getVideo(videoId);
+    if (!video) {
+      throw new Error(`Video ${videoId} not found`);
+    }
+
+    await storage.updateVideoStatus(videoId, 'transcribing');
+
+    // Extract audio
+    const audioPath = await extractAudio(video.filePath);
+    console.log(`[TRANSCRIPTION FALLBACK] Audio extracted to: ${audioPath}`);
+
+    // Get video duration
+    const duration = await getVideoDuration(video.filePath);
+    await storage.updateVideoDuration(videoId, duration);
+    console.log(`[TRANSCRIPTION FALLBACK] Video duration: ${duration} seconds`);
+
+    // Try alternative transcription services
+    let transcriptionResult;
+    
+    // Try Gemini first as fallback
+    try {
+      console.log('[TRANSCRIPTION FALLBACK] Attempting Gemini transcription...');
+      transcriptionResult = await transcribeWithGemini(audioPath);
+    } catch (geminiError) {
+      console.error('[TRANSCRIPTION FALLBACK] Gemini failed:', geminiError);
+      
+      // Try ElevenLabs as second fallback
+      try {
+        console.log('[TRANSCRIPTION FALLBACK] Attempting ElevenLabs transcription...');
+        transcriptionResult = await transcribeWithElevenLabs(audioPath);
+      } catch (elevenLabsError) {
+        console.error('[TRANSCRIPTION FALLBACK] ElevenLabs failed:', elevenLabsError);
+        throw new Error('All fallback transcription services failed');
+      }
+    }
+
+    console.log(`[TRANSCRIPTION FALLBACK] Transcription completed`);
+
+    // Create transcription records with studio-grade standards
+    const transcriptions = [];
+    
+    if (transcriptionResult.segments && transcriptionResult.segments.length > 0) {
+      for (const segment of transcriptionResult.segments) {
+        const segmentText = segment.text.trim();
+        const rawConfidence = segment.confidence || 0.75; // Lower confidence for fallback
+        
+        // Apply studio-grade standards analysis
+        const enhancedSegment = enhanceTranscriptionWithStandards(
+          segmentText,
+          segment.start,
+          segment.end,
+          rawConfidence,
+          'fallback-service'
+        );
+        
+        // Calculate studio-grade confidence score
+        const enhancedConfidence = calculateEnhancedConfidence(
+          rawConfidence,
+          'fallback-service',
+          enhancedSegment.qualityScore,
+          segmentText.length,
+          segment.end - segment.start
+        );
+        
+        // Split segments that are too long according to Netflix standards
+        const standardizedSegments = splitLongSegment(
+          segmentText,
+          segment.start,
+          segment.end,
+          NETFLIX_STANDARDS.maxDuration
+        );
+        
+        for (const stdSegment of standardizedSegments) {
+          const transcription = await storage.createTranscription({
+            videoId: videoId,
+            language: 'bn', // Bengali transcription
+            text: stdSegment.text,
+            startTime: stdSegment.startTime,
+            endTime: stdSegment.endTime,
+            confidence: enhancedConfidence,
+            modelSource: 'fallback-service',
+            isOriginal: true
+          });
+          transcriptions.push(transcription);
+        }
+      }
+    } else {
+      // Create single transcription if no segments
+      const transcription = await storage.createTranscription({
+        videoId: videoId,
+        language: 'bn', // Bengali transcription
+        text: transcriptionResult.text || 'No transcription available',
+        startTime: 0,
+        endTime: duration,
+        confidence: 0.65, // Lower confidence for fallback non-segmented output
+        modelSource: 'fallback-service',
+        isOriginal: true
+      });
+      transcriptions.push(transcription);
+    }
+
+    // Clean up audio file
+    try {
+      if (fs.existsSync(audioPath)) {
+        fs.unlinkSync(audioPath);
+      }
+    } catch (cleanupError) {
+      console.error('[TRANSCRIPTION FALLBACK] Failed to cleanup audio file:', cleanupError);
+    }
+
+    await storage.updateVideoStatus(videoId, 'transcribed');
+    return transcriptions;
+  } catch (error) {
+    console.error(`[TRANSCRIPTION FALLBACK] Error:`, error);
+    await storage.updateVideoStatus(videoId, 'failed');
+    throw error;
   }
 }
 

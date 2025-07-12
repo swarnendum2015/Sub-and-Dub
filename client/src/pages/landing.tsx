@@ -28,25 +28,43 @@ export default function LandingPage() {
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   ) : [];
 
-  const handleFileUpload = async (file: File) => {
-    if (!file) return;
-
+  const validateFile = (file: File): { isValid: boolean; error?: string; errorCode?: string } => {
     // Validate file type
     const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload a video file (MP4, MOV, AVI, MKV)",
-        variant: "destructive",
-      });
-      return;
+    const allowedExtensions = ['.mp4', '.mov', '.avi', '.mkv'];
+    
+    const isValidType = allowedTypes.includes(file.type) || 
+                       allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+    
+    if (!isValidType) {
+      return {
+        isValid: false,
+        error: "Unsupported format. Please use MP4, MOV, AVI, or MKV under 500 MB.",
+        errorCode: 'UNSUPPORTED_FORMAT'
+      };
     }
 
     // Validate file size (500MB)
     if (file.size > 500 * 1024 * 1024) {
+      return {
+        isValid: false,
+        error: "File too large. Please use MP4, MOV, AVI, or MKV under 500 MB.",
+        errorCode: 'FILE_TOO_LARGE'
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+
+    // Pre-upload validation
+    const validation = validateFile(file);
+    if (!validation.isValid) {
       toast({
-        title: "File too large",
-        description: "Please upload a video file smaller than 500MB",
+        title: "Upload blocked",
+        description: validation.error,
         variant: "destructive",
       });
       return;
@@ -86,7 +104,15 @@ export default function LandingPage() {
               refetchVideos(); // Force refresh video list
               resolve();
             } else {
-              reject(new Error(xhr.responseText || `HTTP ${xhr.status}`));
+              // Handle upload error with specific error message from server
+              let errorMessage = 'Upload failed';
+              try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                errorMessage = errorResponse.message || errorResponse.error || errorMessage;
+              } catch (e) {
+                errorMessage = xhr.responseText || `HTTP ${xhr.status}`;
+              }
+              reject(new Error(errorMessage));
             }
           } catch (error) {
             reject(error);

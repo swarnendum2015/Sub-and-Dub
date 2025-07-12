@@ -149,8 +149,18 @@ export function VideoStatusCard({ video, onRetry, onStartTranscription, onViewWo
         {video.status === 'failed' && (
           <div className="mt-4 p-3 bg-red-50 rounded-lg">
             <p className="text-sm text-red-800">
-              ❌ Processing failed. This could be due to API limits or file format issues. Click "Retry" to try again.
+              ❌ {video.errorMessage || 'Processing failed. This could be due to API limits or file format issues. Click "Retry" to try again.'}
             </p>
+            {video.errorCode === 'UNSUPPORTED_FORMAT' && (
+              <p className="text-xs text-red-600 mt-2">
+                💡 <strong>Solution:</strong> Convert your video to MP4 (H.264) and retry
+              </p>
+            )}
+            {video.errorCode === 'API_QUOTA_EXCEEDED' && (
+              <p className="text-xs text-red-600 mt-2">
+                💡 <strong>Automatic retry:</strong> Switching to fallback STT engine...
+              </p>
+            )}
           </div>
         )}
       </CardContent>

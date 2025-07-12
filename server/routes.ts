@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { insertVideoSchema } from "@shared/schema";
-import { transcribeVideo } from "./services/transcription-new";
+import { transcribeVideo, transcribeVideoFallback } from "./services/transcription-new";
 import { translateText, retranslateText } from "./services/translation-new";
 import { generateDubbingSimple } from "./services/dubbing-simple";
 import { generateSRT } from "./routes/srt";
@@ -428,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Retry failed video
+  // Retry failed video with automatic fallback
   app.post("/api/videos/:id/retry", async (req: Request, res: Response) => {
     const videoId = parseInt(req.params.id);
     
@@ -441,6 +441,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (video.status !== 'failed' && video.status !== 'processing') {
         return res.status(400).json({ error: "Video is not in a retriable state" });
       }
+      
+      // Clear error information
+      await storage.updateVideoErrorInfo(videoId, { 
+        code: '', 
+        message: '', 
+        retryable: true 
+      });
       
       // Reset status and restart processing
       await storage.updateVideoStatus(videoId, 'pending');
@@ -746,14 +753,29 @@ async function processVideo(videoId: number, selectedModels?: string[]) {
     console.log(`[PROCESS] Starting video processing for ID: ${videoId}`);
     await storage.updateVideoStatus(videoId, "processing");
     
-    // Transcribe video (Bengali only) with selected models
+    // Transcribe video (Bengali only) with selected models and automatic fallback
     console.log(`[PROCESS] Starting Bengali transcription for video ${videoId} with models:`, selectedModels);
     try {
       const transcriptions = await transcribeVideo(videoId, selectedModels);
       console.log(`[PROCESS] Bengali transcription completed. Found ${transcriptions?.length || 0} transcriptions for video ${videoId}`);
     } catch (transcribeError) {
       console.error(`[PROCESS] Transcription error for video ${videoId}:`, transcribeError);
-      throw transcribeError;
+      
+      // Check if this is a quota error and we can fallback
+      const errorClassification = classifyError(transcribeError);
+      if (errorClassification.code === 'API_QUOTA_EXCEEDED') {
+        console.log(`[PROCESS] Quota exceeded, attempting fallback transcription for video ${videoId}`);
+        try {
+          // Try fallback transcription service
+          const fallbackTranscriptions = await transcribeVideoFallback(videoId);
+          console.log(`[PROCESS] Fallback transcription completed. Found ${fallbackTranscriptions?.length || 0} transcriptions for video ${videoId}`);
+        } catch (fallbackError) {
+          console.error(`[PROCESS] Fallback transcription also failed for video ${videoId}:`, fallbackError);
+          throw fallbackError;
+        }
+      } else {
+        throw transcribeError;
+      }
     }
     
     // Create file details after successful transcription
@@ -772,19 +794,74 @@ async function processVideo(videoId: number, selectedModels?: string[]) {
     console.error(`[PROCESS] Processing failed for video ${videoId}:`, error);
     console.error(`[PROCESS] Error details:`, error instanceof Error ? error.stack : error);
     
-    // Store error message for UI display
-    let errorMessage = "Processing failed";
-    if (error instanceof Error) {
-      if (error.message.includes('QUOTA_EXCEEDED')) {
-        errorMessage = "API quota exceeded. Please check your OpenAI billing.";
-      } else {
-        errorMessage = error.message;
-      }
-    }
+    // Classify error and determine appropriate response
+    const errorClassification = classifyError(error);
     
     await storage.updateVideoStatus(videoId, "failed");
-    // Store error in video metadata (we'll need to add this field)
+    
+    // Store error details for UI display
+    await storage.updateVideoErrorInfo(videoId, errorClassification);
   }
+}
+
+// Classify errors for better user messaging
+function classifyError(error: any): { code: string; message: string; retryable: boolean } {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // Database constraint errors
+  if (error.code === '23502' || errorMessage.includes('violates not-null constraint')) {
+    return {
+      code: 'DATABASE_CONSTRAINT',
+      message: 'Data processing error. Please retry or contact support.',
+      retryable: true
+    };
+  }
+  
+  // API Quota errors
+  if (errorMessage.includes('QUOTA_EXCEEDED') || errorMessage.includes('rate limit') || 
+      errorMessage.includes('quota exceeded') || errorMessage.includes('429')) {
+    return {
+      code: 'API_QUOTA_EXCEEDED',
+      message: 'Transcription service quota reached—switching to fallback engine.',
+      retryable: true
+    };
+  }
+  
+  // Codec/Format errors
+  if (errorMessage.includes('codec') || errorMessage.includes('format not supported') || 
+      errorMessage.includes('unsupported') || errorMessage.includes('Invalid data found')) {
+    return {
+      code: 'UNSUPPORTED_FORMAT',
+      message: 'Transcoding failed: unsupported video codec. Please convert to H.264 MP4.',
+      retryable: false
+    };
+  }
+  
+  // File not found errors
+  if (errorMessage.includes('ENOENT') || errorMessage.includes('No such file')) {
+    return {
+      code: 'FILE_NOT_FOUND',
+      message: 'Video file not found. Please re-upload your video.',
+      retryable: false
+    };
+  }
+  
+  // Network/Connection errors
+  if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('network') || 
+      errorMessage.includes('timeout')) {
+    return {
+      code: 'NETWORK_ERROR',
+      message: 'Network connection failed. Please check your internet and retry.',
+      retryable: true
+    };
+  }
+  
+  // Default fallback
+  return {
+    code: 'UNKNOWN_ERROR',
+    message: 'Processing failed. This could be due to API limits or file format issues.',
+    retryable: true
+  };
 }
 
 // Create file details for a video

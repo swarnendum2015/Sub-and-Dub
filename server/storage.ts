@@ -28,6 +28,7 @@ export interface IStorage {
   updateVideoBengaliConfirmed(id: number, confirmed: boolean): Promise<void>;
   updateVideoSourceLanguage(id: number, language: string, confidence: number): Promise<void>;
   updateVideoServices(id: number, services: string[], models: string[], targetLanguages: string[]): Promise<void>;
+  updateVideoErrorInfo(id: number, error: { code: string; message: string; retryable: boolean }): Promise<void>;
 
   // Transcription operations
   createTranscription(transcription: InsertTranscription): Promise<Transcription>;
@@ -195,6 +196,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(fileDetails.videoId, videoId));
     return details || undefined;
   }
+
+  async updateVideoErrorInfo(id: number, error: { code: string; message: string; retryable: boolean }): Promise<void> {
+    await db.update(videos).set({
+      errorCode: error.code,
+      errorMessage: error.message,
+      isRetryable: error.retryable,
+    }).where(eq(videos.id, id));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -276,6 +285,16 @@ export class MemStorage implements IStorage {
       video.selectedServices = JSON.stringify(services);
       video.selectedModels = JSON.stringify(models);
       video.targetLanguages = JSON.stringify(targetLanguages);
+      this.videos.set(id, video);
+    }
+  }
+
+  async updateVideoErrorInfo(id: number, error: { code: string; message: string; retryable: boolean }): Promise<void> {
+    const video = this.videos.get(id);
+    if (video) {
+      video.errorCode = error.code;
+      video.errorMessage = error.message;
+      video.isRetryable = error.retryable;
       this.videos.set(id, video);
     }
   }
